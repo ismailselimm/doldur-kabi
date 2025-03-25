@@ -6,6 +6,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
+import 'dart:math';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path_provider/path_provider.dart';
 
 class AddLostPetScreen extends StatefulWidget {
   @override
@@ -16,11 +19,22 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
   final TextEditingController _petNameController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  String _selectedPetType = "Kedi"; // Varsayılan olarak kedi seçili
-  File? _selectedImage; // Kullanıcının seçtiği resim
+  String _selectedPetType = "Kedi";
+  File? _selectedImage;
   bool _isLoading = false;
+  String? _selectedCity = "İstanbul"; // Varsayılan olarak İstanbul seçili olacak
+  final List<String> _cities = [
+    "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Amasya", "Ankara", "Antalya", "Artvin", "Aydın",
+    "Balıkesir", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı",
+    "Çorum", "Denizli", "Diyarbakır", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep",
+    "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Isparta", "Mersin", "İstanbul", "İzmir", "Kars",
+    "Kastamonu", "Kayseri", "Kırklareli", "Kırşehir", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa",
+    "Kahramanmaraş", "Mardin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Rize", "Sakarya",
+    "Samsun", "Siirt", "Sinop", "Sivas", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Şanlıurfa",
+    "Uşak", "Van", "Yozgat", "Zonguldak", "Aksaray", "Bayburt", "Karaman", "Kırıkkale", "Batman",
+    "Şırnak", "Bartın", "Ardahan", "Iğdır", "Yalova", "Karabük", "Kilis", "Osmaniye", "Düzce"
+  ];
 
-  // Resim seçme fonksiyonu
   Future<void> _pickImage() async {
     final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
@@ -30,12 +44,20 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
     }
   }
 
+  @override
+  void initState() {
+    super.initState();
+    debugPrint("Kayıp İlan Ver Sayfası Açıldı"); // Debugging
+  }
+
+
   Future<void> _submitLostPet() async {
     if (_petNameController.text.isEmpty ||
         _locationController.text.isEmpty ||
-        _phoneController.text.isEmpty) { // Fotoğraf zorunlu olmaktan çıktı!
+        _phoneController.text.isEmpty ||
+        _selectedImage == null) { // 🔥 Fotoğraf eklenmezse hata verecek!
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Lütfen tüm alanları doldurun!")),
+        const SnackBar(content: Text("Lütfen tüm alanları doldurun ve bir fotoğraf ekleyin!")),
       );
       return;
     }
@@ -47,24 +69,31 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
     String? imageUrl;
 
     try {
-      if (_selectedImage != null) {
-        imageUrl = await _uploadImageToStorage(_selectedImage!);
-        if (imageUrl == null) {
-          print("DEBUG ERROR: Fotoğraf yüklenemedi, ilana fotoğraf eklenmeyecek.");
-        }
-      } else {
-        print("DEBUG: Kullanıcı fotoğraf eklemedi.");
+      // 🔥 Fotoğraf varsa, Storage'a yükle
+      imageUrl = await _uploadImageToStorage(_selectedImage!);
+
+      if (imageUrl == null) {
+        print("❌ HATA: Fotoğraf yükleme başarısız!");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Fotoğraf yüklenirken bir hata oluştu!")),
+        );
+        return;
       }
 
-      await FirebaseFirestore.instance.collection('lost_pets').add({
+      // 🔥 Firestore'a ilan ekle
+      DocumentReference docRef = await FirebaseFirestore.instance.collection('lost_pets').add({
         'petName': _petNameController.text,
         'location': _locationController.text,
         'phone': _phoneController.text,
         'petType': _selectedPetType,
-        'imageUrl': imageUrl, // Eğer fotoğraf yoksa null olarak kaydolur
+        'city': _selectedCity, // 🔥 Şehir filtresi için kaydediyoruz
+        'imageUrl': imageUrl, // 🔥 Artık HER ZAMAN resim var!
         'timestamp': FieldValue.serverTimestamp(),
         'userId': FirebaseAuth.instance.currentUser?.uid,
       });
+
+      print("✅ Firestore’a ilan başarıyla eklendi! DOC ID: ${docRef.id}");
+      print("🖼️ Kayıtlı Resim URL: $imageUrl");
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Kayıp ilanı başarıyla eklendi!")),
@@ -72,7 +101,7 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
 
       Navigator.pop(context);
     } catch (e) {
-      print("DEBUG ERROR: Kayıp ilanı eklenirken hata oluştu: $e");
+      print("❌ HATA: Firestore’a kaydetme hatası: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Bir hata oluştu: $e")),
       );
@@ -84,23 +113,46 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
   }
 
 
+
   Future<String?> _uploadImageToStorage(File image) async {
     try {
-      String fileName = const Uuid().v4();
-      Reference storageRef =
-      FirebaseStorage.instance.ref().child('lost_pets/$fileName.jpg');
+      print("📡 Fotoğraf sıkıştırılıyor...");
+      File? compressedImage = await _compressImage(image);
 
-      UploadTask uploadTask = storageRef.putFile(image);
-      TaskSnapshot snapshot = await uploadTask.whenComplete(() => {});
+      if (compressedImage == null) {
+        print("❌ HATA: Resim sıkıştırılamadı!");
+        return null;
+      }
+
+      print("📡 Fotoğraf yükleme başladı...");
+      String fileName = const Uuid().v4();
+      Reference storageRef = FirebaseStorage.instance.ref().child('lost_pets/$fileName.jpg');
+
+      UploadTask uploadTask = storageRef.putFile(compressedImage);
+      TaskSnapshot snapshot = await uploadTask;
 
       String downloadUrl = await snapshot.ref.getDownloadURL();
-      print("DEBUG: Fotoğraf başarıyla yüklendi: $downloadUrl");
+      print("✅ Fotoğraf başarıyla yüklendi: $downloadUrl");
       return downloadUrl;
     } catch (e) {
-      print("DEBUG ERROR: Fotoğraf yükleme hatası: $e");
+      print("❌ HATA: Fotoğraf yükleme hatası: $e");
       return null;
     }
   }
+
+  Future<File?> _compressImage(File imageFile) async {
+    final dir = await getTemporaryDirectory();
+    final targetPath = '${dir.path}/${Random().nextInt(100000)}.jpg';
+
+    final result = await FlutterImageCompress.compressAndGetFile(
+      imageFile.absolute.path,
+      targetPath,
+      quality: 70, // 🔥 Kaliteyi düşürerek dosya boyutunu azalt
+    );
+
+    return result != null ? File(result.path) : null;
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -116,9 +168,7 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
         ),
         backgroundColor: const Color(0xFF9346A1),
         centerTitle: true,
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -127,7 +177,6 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // İlan Türü Seçimi
                 Text(
                   "İlan Türü",
                   style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold),
@@ -141,28 +190,15 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
                     _buildPetTypeButton("Köpek"),
                   ],
                 ),
+                const SizedBox(height: 12), // 🔥 Araya boşluk ekle
+                _buildCityDropdown(), // 🔥 Şehir dropdown’u alta alındı
                 const SizedBox(height: 20),
-
-                // Hayvanın Adı
                 _buildTextField("Hayvanın Adı", _petNameController),
-
-                // Adres Bilgisi
                 _buildTextField("Nerede Kayboldu? (İl-İlçe Şeklinde)", _locationController),
-
-                // Telefon Numarası
                 _buildTextField("İletişim Numarası", _phoneController, keyboardType: TextInputType.phone),
-
                 const SizedBox(height: 20),
-
-                // Resim Yükleme Kartı
-                _buildCard(
-                  title: "Fotoğraf Yükle",
-                  isImage: true,
-                ),
-
+                _buildImageUploadCard(),
                 const SizedBox(height: 20),
-
-                // Kaydet Butonu
                 Center(
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _submitLostPet,
@@ -174,7 +210,7 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
                         : Text(
-                      "İlanı Kaydet",
+                      "İlanı Paylaş",
                       style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),
@@ -187,10 +223,51 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
     );
   }
 
-  // Kedi / Köpek Seçenekleri
+  Widget _buildCityDropdown() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.purple.shade400, width: 1.5),
+      ),
+      child: DropdownButtonFormField<String>(
+        value: _selectedCity,
+        isExpanded: true,
+        icon: Icon(Icons.arrow_drop_down, color: Colors.purple),
+        items: _cities.map((city) {
+          return DropdownMenuItem<String>(
+            value: city,
+            child: Text(city, style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w500)),
+          );
+        }).toList(),
+        onChanged: (value) {
+          setState(() {
+            _selectedCity = value!;
+          });
+        },
+        decoration: InputDecoration(
+          border: InputBorder.none, // Çerçeveyi kaldır
+        ),
+        menuMaxHeight: 200, // 🔥 **Dropdown'un max yüksekliğini 3-4 şehir gösterecek şekilde sınırla**
+      ),
+    );
+  }
+
+  Widget _buildCityInfoText() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Text(
+        "$_selectedCity şehrinde kayıp ilanı veriyorsunuz",
+        textAlign: TextAlign.center,
+        style: GoogleFonts.poppins(fontSize: 14, color: Colors.purple, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+
+
   Widget _buildPetTypeButton(String type) {
     bool isSelected = _selectedPetType == type;
-
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -221,51 +298,6 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
     );
   }
 
-  Widget _buildCard({required String title, bool isImage = false}) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            if (isImage)
-              GestureDetector(
-                onTap: _pickImage,
-                child: _selectedImage == null
-                    ? Container(
-                  height: 150,
-                  width: double.infinity,
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_photo_alternate, size: 50, color: Colors.grey),
-                        SizedBox(height: 8),
-                        Text("Fotoğraf Yükle", style: TextStyle(color: Colors.grey)),
-                      ],
-                    ),
-                  ),
-                )
-                    : ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.file(_selectedImage!, fit: BoxFit.cover, width: double.infinity, height: 150),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-  // Input Alanları
   Widget _buildTextField(String label, TextEditingController controller, {TextInputType keyboardType = TextInputType.text}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -282,4 +314,40 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
       ),
     );
   }
+
+  Widget _buildImageUploadCard() {
+    return GestureDetector(
+      onTap: _pickImage,
+      child: Container(
+        width: double.infinity, // 📌 **Tüm genişliği kaplamasını sağla**
+        child: Card(
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text("Fotoğraf Yükle", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+                _selectedImage == null
+                    ? Column(
+                  children: [
+                    const Icon(Icons.add_photo_alternate, size: 80, color: Colors.grey), // 📌 **İkonu büyüt**
+                    const SizedBox(height: 12),
+                    const Text("Fotoğraf Seç", style: TextStyle(color: Colors.grey, fontSize: 16)), // **Yazıyı büyüt**
+                  ],
+                )
+                    : ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(_selectedImage!, fit: BoxFit.cover, width: double.infinity, height: 250), // 📌 **Resmi büyüt**
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
 }

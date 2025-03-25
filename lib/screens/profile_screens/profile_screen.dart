@@ -5,7 +5,6 @@ import 'package:doldur_kabi/screens/profile_screens/invite_friends_page.dart';
 import 'package:doldur_kabi/screens/login_screens/login_screen.dart';
 import 'package:doldur_kabi/screens/profile_screens/privacy_notice_page.dart';
 import 'package:doldur_kabi/screens/profile_screens/privacy_policy_page.dart';
-import 'package:doldur_kabi/screens/profile_screens/supporters_page.dart';
 import 'package:doldur_kabi/screens/profile_screens/terms_page.dart';
 import 'package:doldur_kabi/screens/profile_screens/true_information.dart';
 import 'package:doldur_kabi/screens/profile_screens/update_profile_page.dart';
@@ -16,6 +15,8 @@ import '../../services/auth_service.dart';
 import 'contact_us_page.dart';
 import 'package:doldur_kabi/screens/profile_screens/messages_screen.dart';
 import 'dart:ui';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // Yeni ikonlar için
+import 'my_listings_screen.dart';
 
 
 class ProfileScreen extends StatefulWidget {
@@ -27,21 +28,19 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   User? user;
-  int doldurKabiPuan = 900;
+ // int doldurKabiPuan = 900;
   int beslemeNoktasiSayisi = 0;  // 🔥 Başlangıçta 0 olsun
   int hayvanEviSayisi = 0;  // 🔥 Başlangıçta 0 olsun
   int mamaDoldurmaSayisi = 0;  // 🔥 Yeni değişken
   int gonderiSayisi = 0;
 
 
-
-
   @override
+
   void initState() {
     super.initState();
     user = FirebaseAuth.instance.currentUser;
 
-    // Giriş yapılmamışsa LoginScreen'e yönlendirme
     if (user == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.pushReplacement(
@@ -50,11 +49,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       });
     } else {
-      _getUserContributions(); // 🔥 Firebase’den kaç tane eklediğini al
+      // 🔥 Verinin gerçekten yüklenmesini garanti etmek için gecikme ekliyoruz.
+      Future.delayed(Duration(milliseconds: 300), () {
+        if (mounted) {
+          _getUserContributions();
+        }
+      });
     }
   }
 
 
+  /// **🔥 Kullanıcının katkılarını direkt `users` koleksiyonundan çek**
   Future<void> _getUserContributions() async {
     if (user == null) return;
 
@@ -62,91 +67,123 @@ class _ProfileScreenState extends State<ProfileScreen> {
     FirebaseFirestore firestore = FirebaseFirestore.instance;
 
     try {
-      // Kullanıcının eklediği besleme noktalarını say
-      QuerySnapshot feedPointsSnapshot = await firestore
-          .collection('feedPoints')
-          .where('addedBy', isEqualTo: userId)
-          .get();
+      print("🔥 Kullanıcı katkıları çekiliyor... UID: $userId");
 
-      // Kullanıcının eklediği hayvan evlerini say
-      QuerySnapshot animalHousesSnapshot = await firestore
-          .collection('animalHouses')
-          .where('addedBy', isEqualTo: userId)
-          .get();
-
-      // Kullanıcının mama doldurma sayısını al
+      // **🔥 Kullanıcı bilgilerini `users` koleksiyonundan al**
       DocumentSnapshot userDoc = await firestore.collection('users').doc(userId).get();
 
-      QuerySnapshot postsSnapshot = await FirebaseFirestore.instance
-          .collection('posts')
-          .where('addedBy', isEqualTo: userId)
-          .get();
+      if (!userDoc.exists) {
+        print("❌ Kullanıcı Firestore'da bulunamadı!");
+        return;
+      }
+
+      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
 
       setState(() {
-        gonderiSayisi = postsSnapshot.docs.length;
+        beslemeNoktasiSayisi = userData['beslemeNoktasiSayisi'] ?? 0;
+        hayvanEviSayisi = userData['hayvanEviSayisi'] ?? 0;
+        gonderiSayisi = userData['gonderiSayisi'] ?? 0;
+        mamaDoldurmaSayisi = userData['mamaDoldurmaSayisi'] ?? 0;
       });
 
-      print("🔥 Gönderi Sayısı: $gonderiSayisi");
-
-      setState(() {
-        beslemeNoktasiSayisi = feedPointsSnapshot.docs.length;
-        hayvanEviSayisi = animalHousesSnapshot.docs.length;
-        mamaDoldurmaSayisi = userDoc.exists && userDoc['mamaDoldurmaSayisi'] != null
-            ? userDoc['mamaDoldurmaSayisi']
-            : 0; // Eğer veri yoksa 0 olarak ayarla
-      });
-
-      print("🔥 Firebase'den çekildi: Besleme Noktası: $beslemeNoktasiSayisi, Hayvan Evi: $hayvanEviSayisi, Mama Doldurma: $mamaDoldurmaSayisi");
-
+      print("✅ Firestore verileri başarıyla çekildi!");
+      print("📌 Besleme Noktası: $beslemeNoktasiSayisi");
+      print("📌 Hayvan Evi: $hayvanEviSayisi");
+      print("📌 Gönderi: $gonderiSayisi");
+      print("📌 Mama Doldurma: $mamaDoldurmaSayisi");
     } catch (e) {
-      print("❌ Hata: Firebase verileri çekilemedi -> $e");
+      print("❌ Hata: Kullanıcı verileri çekilirken sorun oluştu: $e");
     }
   }
 
-  Future<void> _fetchUserContributions() async {
-    String userID = user!.uid;
-    FirebaseFirestore firestore = FirebaseFirestore.instance;
+  Future<void> _fetchUpdatedUserData() async {
+    if (user == null) return;
 
-    // Kullanıcının eklediği besleme noktası sayısını getir
-    QuerySnapshot feedPointsSnapshot = await firestore
-        .collection('feedPoints')
-        .where('addedBy', isEqualTo: userID)
-        .get();
+    try {
+      await user!.reload(); // 🔥 Firebase Authentication verisini yenile
+      user = FirebaseAuth.instance.currentUser;
 
-    // Kullanıcının eklediği hayvan evi sayısını getir
-    QuerySnapshot animalHousesSnapshot = await firestore
-        .collection('animalHouses')
-        .where('addedBy', isEqualTo: userID)
-        .get();
+      var userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+      if (userDoc.exists) {
+        setState(() {
+          user = FirebaseAuth.instance.currentUser;
+        });
+      }
 
-    setState(() {
-      beslemeNoktasiSayisi = feedPointsSnapshot.docs.length;
-      hayvanEviSayisi = animalHousesSnapshot.docs.length;
-    });
+      print("✅ Kullanıcı bilgileri güncellendi: ${user!.photoURL}");
+    } catch (e) {
+      print("❌ HATA: Kullanıcı verisi güncellenemedi: $e");
+    }
   }
 
-  Widget _buildProfileStat(String title, String value, Color color) {
+
+  void _showLogoutConfirmation() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), // Köşeleri yuvarlak
+          title: Text(
+            "Çıkış Yap",
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black87),
+          ),
+          content: Text(
+            "Hesabınızdan çıkış yapmak istediğinize emin misiniz?",
+            style: GoogleFonts.poppins(fontSize: 16, color: Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // **Hayır** seçilirse sadece kapat
+              },
+              child: Text("Hayır", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await AuthService().signOut();
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen())); // **Evet** seçilirse çıkış yap
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+              child: Text("Evet", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildProfileStat(String title, String value, Color color, IconData icon) {
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                value, // 🔥 SAYI ÖNCE
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 6), // 🔥 Sayı ile ikon arasına boşluk ekle
+              Transform.translate(
+                offset: const Offset(0, -1), // 🔥 İKONU BİRAZ YUKARI AL
+                child: Icon(icon, color: color, size: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
           Text(
-            title,
+            title, // 🔥 AÇIKLAMA
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
             textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
           ),
         ],
       ),
@@ -177,6 +214,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: Colors.white,
             ),
           ),
+          automaticallyImplyLeading: false, // 🔥 Geri butonunu tamamen kaldır!
           centerTitle: true,
           elevation: 0,
         ),
@@ -213,9 +251,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: CircleAvatar(
                             radius: 40,
                             backgroundColor: Colors.grey[300],
-                            backgroundImage: user?.photoURL != null && user!.photoURL!.isNotEmpty
-                                ? CachedNetworkImageProvider(user!.photoURL!) as ImageProvider<Object>
-                                : const AssetImage('assets/images/avatar1.png'),
+                            child: ClipOval(
+                              child: user?.photoURL != null && user!.photoURL!.isNotEmpty
+                                  ? Image.network(
+                                user!.photoURL!,
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return const CircularProgressIndicator(); // Yüklenirken gösterilecek
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Image.asset('assets/images/avatar1.png'); // Hata olursa varsayılan resim
+                                },
+                              )
+                                  : Image.asset('assets/images/avatar1.png'), // Varsayılan resim
+                            ),
                           ),
                         ),
                       ),
@@ -246,36 +298,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: Icon(Icons.settings_outlined, color: Colors.grey[600]),
-                        onPressed: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (context)=>const UpdateProfilePage()));
+                        icon: const FaIcon(FontAwesomeIcons.gear, color: Colors.grey, size: 20,), // Ayarlar
+                        onPressed: () async {
+                          bool? updated = await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const UpdateProfilePage()),
+                          );
+
+                          if (updated == true) {
+                            _fetchUpdatedUserData(); // ✅ **Profil güncellendi, Firebase’den yeni veriyi çek**
+                          }
                         },
                       ),
                     ],
                   ),
-                  Divider(color: Colors.grey[300]),
                   const SizedBox(height: 8),
+                  Divider(color: Colors.grey[300]),
                   Column(
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildProfileStat("Mama Doldurma Sayısı", "$mamaDoldurmaSayisi", Colors.blueAccent[700]!),
-                          _buildProfileStat("Besleme Noktası Ekleme", "$beslemeNoktasiSayisi", Colors.pink),
+                          _buildProfileStat("Mama Doldurma", "$mamaDoldurmaSayisi", Colors.blueAccent[700]!, FontAwesomeIcons.bowlFood),
+                          _buildProfileStat("Besleme Kabı", "$beslemeNoktasiSayisi", Colors.pink, FontAwesomeIcons.paw),
                         ],
                       ),
-                      const SizedBox(height: 16), // 🔥 Üst ve alt blok arasında boşluk
+                      const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildProfileStat("Hayvan Evi Ekleme", "$hayvanEviSayisi", Colors.teal),
-                          _buildProfileStat("Gönderi Paylaşma", "$gonderiSayisi", Colors.orange),
+                          _buildProfileStat("Hayvan Evi", "$hayvanEviSayisi", Colors.teal, FontAwesomeIcons.houseChimney),
+                          _buildProfileStat("Gönderi Paylaşma", "$gonderiSayisi", Colors.orange, FontAwesomeIcons.paperPlane),
                         ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Row(
+               /*   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
@@ -316,7 +374,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ],
-                  ),
+                  ), */
                 ],
               ),
             ),
@@ -327,67 +385,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               children: [
                 _buildOptionTile(
-                    icon: Icons.message_outlined,
+                    icon: FontAwesomeIcons.solidMessage, // 🗨️ Mesajlar
                     title: 'Mesajlarım',
                     onTap: () {
                       Navigator.push(context, MaterialPageRoute(builder: (context) => MessagesScreen()));
                     }),
                 _buildOptionTile(
-                    icon: Icons.help_outline,
-                    title: 'Yardım',
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const HelpPage()));
-                    }),
+                  icon: FontAwesomeIcons.bullhorn, // 📢 Duyurular
+                  title: 'Paylaşımlarım',
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => IlanlarimScreen()),);
+                    },),
                 _buildOptionTile(
-                    icon: Icons.contact_phone_outlined,
-                    title: 'Bize Ulaşın',
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ContactUsPage()));
-                    }),
-                _buildOptionTile(
-                    icon: Icons.help_center_outlined,
+                    icon: FontAwesomeIcons.lightbulb, // 💡 Bilgilendirme
                     title: 'Doğru Bilinen Yanlışlar',
                     onTap: () {
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const MythsPage()));
                     }),
                 _buildOptionTile(
-                    icon: Icons.favorite_border,
-                    title: 'Destekçilerimiz',
+                    icon: FontAwesomeIcons.solidCircleQuestion, // ❓ Yardım
+                    title: 'Yardım',
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => SupportersScreen()));
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const HelpPage()));
                     }),
                 _buildOptionTile(
-                    icon: Icons.privacy_tip_outlined,
+                    icon: FontAwesomeIcons.phoneVolume, // 📞 İletişim
+                    title: 'Bize Ulaşın',
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ContactUsPage()));
+                    }),
+                _buildOptionTile(
+                    icon: FontAwesomeIcons.userShield, // 🛡️ Gizlilik
                     title: 'Gizlilik Politikası',
                     onTap: () {
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyPolicyPage()));
                     }),
                 _buildOptionTile(
-                    icon: Icons.description_outlined,
+                    icon: FontAwesomeIcons.fileContract, // 📄 Şartlar
                     title: 'Kullanım Şartları',
                     onTap: () {
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const TermsAndConditionsPage()));
                     }),
                 _buildOptionTile(
-                    icon: Icons.info_outline_rounded,
+                    icon: FontAwesomeIcons.circleInfo, // ℹ️ Aydınlatma Metni
                     title: 'Aydınlatma Metni',
                     onTap: () {
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyNoticePage()));
                     }),
                 _buildOptionTile(
-                    icon: Icons.share,
+                    icon: FontAwesomeIcons.shareNodes, // 🔗 Paylaşım
                     title: "DoldurKabı'yı Paylaş",
                     onTap: () {
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const InviteFriendsPage()));
                     }),
                 _buildOptionTile(
-                    icon: Icons.exit_to_app,
+                    icon: FontAwesomeIcons.arrowRightFromBracket, // 🚪 Çıkış
                     title: 'Çıkış Yap',
-                    onTap: () async {
-                      await AuthService().signOut();
-                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+                    onTap: () {
+                      _showLogoutConfirmation();
                     }),
-          const SizedBox(height: 10),
+                const SizedBox(height: 10),
                 Center(
                   child: Text(
                     "Uygulama Versiyonu : 1.0.0",
@@ -407,7 +464,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
-        leading: Icon(icon, color: const Color(0xFF9346A1)),
+        leading: Icon(icon,size: 22, color: Colors.black87),
         title: Text(
           title,
           style: GoogleFonts.poppins(fontSize: 14, color: Colors.black87),

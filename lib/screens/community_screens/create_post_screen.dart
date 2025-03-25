@@ -1,10 +1,16 @@
 import 'dart:io';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:doldur_kabi/main.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img;
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+// 📌 NAVIGATION BAR İÇİN GEREKEN SAYFA
+import 'package:doldur_kabi/screens/community_screens/community_screen.dart';
 
 class CreatePostScreen extends StatefulWidget {
   @override
@@ -16,46 +22,67 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   File? _selectedImage;
   final TextEditingController _postController = TextEditingController();
   bool _isLoading = false;
-  final FirebaseStorage storage = FirebaseStorage.instance;
 
-  /// **🔥 Galeriden resim seç**
+  /// **🔥 Galeriden resim seç ve sıkıştır**
   Future<void> _pickImage() async {
     final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
+    if (pickedFile == null) return;
+
+    File imageFile = File(pickedFile.path);
+    img.Image? originalImage = img.decodeImage(imageFile.readAsBytesSync());
+
+    if (originalImage != null) {
+      File compressedFile = File(pickedFile.path)
+        ..writeAsBytesSync(img.encodeJpg(originalImage, quality: 75));
+
       setState(() {
-        _selectedImage = File(pickedFile.path);
+        _selectedImage = compressedFile;
       });
-      print("📷 Seçilen resim: ${_selectedImage!.path}");
     }
   }
 
   /// **🔥 Resmi Firebase Storage'a yükleyip URL döndür**
+  /// **🔥 Resmi Firebase Storage'a yükleyip URL döndür**
   Future<void> _uploadImage() async {
-    await FirebaseAuth.instance.currentUser?.reload();
-    User? user = FirebaseAuth.instance.currentUser;
     if (_selectedImage == null || user == null) {
-      print("❌ Kullanıcı giriş yapmamış!");
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      // Firebase Storage için dosya yolu
-      String filePath = 'posts/${DateTime.now().millisecondsSinceEpoch}.jpg';
-      print("📁 Dosya yolu: $filePath");
-
+      String filePath = 'posts/postImage_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final storageRef = FirebaseStorage.instance.ref().child(filePath);
-
-
-      // Yükleme tamamlanınca URL al
-      TaskSnapshot snapshot = await storageRef.putFile(_selectedImage!);
+      Uint8List fileData = await _selectedImage!.readAsBytes();
+      TaskSnapshot snapshot = await storageRef.putData(fileData);
       String downloadUrl = await snapshot.ref.getDownloadURL();
-      print("✅ Resim yüklendi: $downloadUrl");
 
+      // **🔥 1️⃣ Gönderiyi Firestore'a ekleyelim**
+      await FirebaseFirestore.instance.collection('posts').add({
+        'imageUrl': downloadUrl,
+        'description': _postController.text,
+        'createdAt': Timestamp.now(),
+        'userId': user?.uid,
+        'username': user?.displayName ?? 'Unknown',
+        'userImage': user?.photoURL ?? 'assets/images/default_avatar.png',
+        'likes': 0,
+        'comments': 0,
+      });
 
+      // **🔥 2️⃣ Kullanıcının gönderi sayısını artır**
+      String userId = user!.uid;
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'gonderiSayisi': FieldValue.increment(1),
+      });
 
-      print("✅ Profil resmi güncellendi.");
+      // ✅ Post paylaşıldıktan sonra Community ekranına yönlendir
+      Navigator.pop(context);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomePage()),
+      );
+
+      print("✅ Gönderi başarıyla eklendi ve kullanıcı profili güncellendi!");
     } catch (e, stacktrace) {
       print("🔥 HATA: $e");
       print("🔍 Stacktrace: $stacktrace");
@@ -73,31 +100,34 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           'Gönderi Paylaş',
           style: GoogleFonts.montserrat(
             fontWeight: FontWeight.w900,
-            fontSize: 22,
+            fontSize: 24,
             color: Colors.white,
           ),
         ),
         backgroundColor: const Color(0xFF9346A1),
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(18.0),
         child: Column(
           children: [
+            // **🔥 Resim Yükleme Alanı**
             GestureDetector(
               onTap: _pickImage,
               child: Container(
-                height: 200,
+                height: 220,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.2),
-                      blurRadius: 10,
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 12,
                       spreadRadius: 2,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
@@ -105,50 +135,68 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ? Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.add_a_photo, size: 50, color: Colors.purple[300]),
-                    const SizedBox(height: 8),
+                    Icon(Icons.add_a_photo, size: 60, color: Colors.grey[500]),
+                    const SizedBox(height: 10),
                     Text(
                       "Fotoğraf Ekle",
-                      style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey[700]),
+                      style: TextStyle(fontSize: 16, color: Colors.grey[700]),
                     ),
                   ],
                 )
                     : ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.file(_selectedImage!, width: double.infinity, height: 200, fit: BoxFit.cover),
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.file(_selectedImage!,
+                      width: double.infinity, height: 220, fit: BoxFit.cover),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
+
+            // **🔥 Açıklama Alanı**
             Container(
-              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.2),
+                    color: Colors.black.withOpacity(0.05),
                     blurRadius: 10,
                     spreadRadius: 2,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
               child: TextField(
                 controller: _postController,
-                maxLines: 3,
+                maxLines: 4,
+                style: TextStyle(fontSize: 16),
                 decoration: InputDecoration(
                   hintText: "Ne paylaşmak istersin?",
-                  hintStyle: GoogleFonts.poppins(fontSize: 16, color: Colors.grey[500]),
+                  hintStyle: TextStyle(color: Colors.grey[600], fontSize: 14),
                   border: InputBorder.none,
+                  contentPadding: EdgeInsets.all(16),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+
+            // **🔥 Paylaş Butonu**
             ElevatedButton(
-              onPressed: () async {
+              onPressed: _isLoading ? null : () async {
                 if (_selectedImage != null) await _uploadImage();
               },
-              child: _isLoading ? CircularProgressIndicator(color: Colors.white) : Text("Paylaş"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF9346A1), // Canlı Mor Tonu
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 40),
+                elevation: 4,
+              ),
+              child: _isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : Text(
+                "Paylaş",
+                style: const TextStyle(fontSize: 16, color: Colors.white),
+              ),
             ),
           ],
         ),

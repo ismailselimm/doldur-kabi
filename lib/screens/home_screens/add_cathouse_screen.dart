@@ -1,10 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:doldur_kabi/main.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+
+import '../login_screens/login_screen.dart';
 
 class AddCathouseScreen extends StatefulWidget {
   @override
@@ -22,8 +25,79 @@ class _AddCathouseScreenState extends State<AddCathouseScreen> {
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
+    _checkUserLoginStatus();
   }
+
+  /// **🔥 Kullanıcı giriş yapmamışsa alert göster**
+  void _checkUserLoginStatus() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showLoginAlert();
+      });
+    } else {
+      _getCurrentLocation();
+    }
+  }
+
+  void _showLoginAlert() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text(
+            "Hayvan Evi Ekleme",
+            style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.purple[700]),
+            textAlign: TextAlign.center,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Hayvan evi ekleyebilmek için giriş yapmalısınız.",
+                style: GoogleFonts.poppins(fontSize: 16, color: Colors.black87, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => LoginScreen()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                ),
+                child: const Text("Giriş Yap", style: TextStyle(fontSize: 18)),
+              ),
+              const SizedBox(height: 8), // 🔥 Butonlar arasına boşluk
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const HomePage()), // 🔥 Giriş yapmadan anasayfaya yönlendir
+                  );
+                },
+                child: const Text(
+                  "Giriş Yapmadan Devam Et",
+                  style: TextStyle(fontSize: 16, color: Colors.purple, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
 
   Future<void> _saveAnimalHouse() async {
     if (_selectedAnimal == null || _selectedLocation == null) {
@@ -34,21 +108,32 @@ class _AddCathouseScreenState extends State<AddCathouseScreen> {
     }
 
     try {
+      // **🔥 1️⃣ Yeni hayvan evi ekleniyor**
       await FirebaseFirestore.instance.collection('animalHouses').add({
         'animal': _selectedAnimal,
         'latitude': _selectedLocation!.latitude,
         'longitude': _selectedLocation!.longitude,
         'address': _currentAddress ?? 'Bilinmeyen adres',
         'date': DateTime.now(),
+        'addedBy': FirebaseAuth.instance.currentUser!.uid, // **🔥 Kullanıcı eklediğini belirtelim**
+      });
+
+      // **🔥 2️⃣ Kullanıcı profilinde hayvan evi sayısını artır**
+      String userId = FirebaseAuth.instance.currentUser!.uid;
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'hayvanEviSayisi': FieldValue.increment(1),
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Yeni ev başarıyla kaydedildi!")),
+        const SnackBar(content: Text("Yeni hayvan evi başarıyla kaydedildi!")),
       );
+
       SelectedIndex.changeSelectedIndex(0);
-      Navigator.push(context, MaterialPageRoute(builder: (context)=>HomePage()));
+      Navigator.push(context, MaterialPageRoute(builder: (context) => HomePage()));
+
+      print("✅ Hayvan evi başarıyla eklendi ve kullanıcı profili güncellendi!");
     } catch (e) {
-      print("Firestore hata: $e");
+      print("❌ Firestore hata: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Kayıt sırasında bir hata oluştu, tekrar deneyin.")),
       );
@@ -132,7 +217,7 @@ class _AddCathouseScreenState extends State<AddCathouseScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Yeni Kedi/Köpek Evi Ekle',
+          'Yeni Hayvan Evi Ekle',
           style: GoogleFonts.montserrat(fontWeight: FontWeight.w900, fontSize: 22, color: Colors.white),
         ),
         backgroundColor: Color(0xFF9346A1),

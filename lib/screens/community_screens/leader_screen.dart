@@ -7,9 +7,9 @@ class LeaderboardScreen extends StatelessWidget {
     final List<Map<String, dynamic>> leaderboardData = [
       {'rank': 1, 'name': 'Ezgi', 'points': 250},
       {'rank': 2, 'name': 'Ayşe', 'points': 200},
-      {'rank': 3, 'name': 'Mehmet', 'points': 150},
+      {'rank': 3, 'name': 'Zeynep', 'points': 150},
       {'rank': 4, 'name': 'Fatma', 'points': 100},
-      {'rank': 5, 'name': 'Ali', 'points': 50},
+      {'rank': 5, 'name': 'Sude', 'points': 50},
     ];
 
     return Scaffold(

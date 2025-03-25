@@ -10,7 +10,7 @@ class NotificationSettingsPage extends StatefulWidget {
 
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   bool appNotifications = true;
-  bool emailNotifications = false;
+  bool emailNotifications = true;
   bool smsNotifications = true;
 
   @override

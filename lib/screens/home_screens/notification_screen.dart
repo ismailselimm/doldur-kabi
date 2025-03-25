@@ -10,8 +10,8 @@ class NotificationScreen extends StatefulWidget {
 }
 
 class _NotificationScreenState extends State<NotificationScreen> {
-  List<bool> _isRead = List.generate(5, (index) => false);
-  List<String> _notifications = List.generate(5, (index) => 'Bildirim ${index + 1}');
+  List<bool> _isRead = [];
+  List<String> _notifications = [];
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +42,19 @@ class _NotificationScreenState extends State<NotificationScreen> {
           ),
         ],
       ),
-      body: ListView.builder(
+      body: _notifications.isEmpty
+          ? Center(
+        child: Text(
+          "Henüz bildiriminiz bulunmamaktadır",
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[600],
+          ),
+          textAlign: TextAlign.center,
+        ),
+      )
+          : ListView.builder(
         padding: EdgeInsets.all(16),
         itemCount: _notifications.length,
         itemBuilder: (context, index) {

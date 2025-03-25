@@ -1,10 +1,9 @@
 import 'dart:ui';
-import 'package:doldur_kabi/screens/community_screens/add_lost_pet_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:doldur_kabi/screens/community_screens/add_lost_pet_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-import 'adopt_pet_screen.dart';
 
 class LostPetsScreen extends StatefulWidget {
   @override
@@ -13,21 +12,20 @@ class LostPetsScreen extends StatefulWidget {
 
 class _LostPetsScreenState extends State<LostPetsScreen> {
   String selectedCategory = "Tümü";
+  String _selectedCity = "Tümü"; // Varsayılan olarak "Tümü" seçili olacak
 
-  final List<Map<String, dynamic>> lostPets = [
-    {
-      "petName": "Minnoş",
-      "location": "İstanbul, Kadıköy",
-      "type": "kedi",
-      "phoneNumber": "+905555555555",
-    },
-    {
-      "petName": "Karabaş",
-      "location": "Ankara, Çankaya",
-      "type": "köpek",
-      "phoneNumber": "+905444444444",
-    }
+  final List<String> _cityList = [
+    "Tümü", "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Amasya", "Ankara", "Antalya", "Artvin", "Aydın",
+    "Balıkesir", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı",
+    "Çorum", "Denizli", "Diyarbakır", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep",
+    "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Isparta", "Mersin", "İstanbul", "İzmir", "Kars",
+    "Kastamonu", "Kayseri", "Kırklareli", "Kırşehir", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa",
+    "Kahramanmaraş", "Mardin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Rize", "Sakarya",
+    "Samsun", "Siirt", "Sinop", "Sivas", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Şanlıurfa",
+    "Uşak", "Van", "Yozgat", "Zonguldak", "Aksaray", "Bayburt", "Karaman", "Kırıkkale", "Batman",
+    "Şırnak", "Bartın", "Ardahan", "Iğdır", "Yalova", "Karabük", "Kilis", "Osmaniye", "Düzce"
   ];
+
 
   @override
   Widget build(BuildContext context) {
@@ -43,13 +41,11 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
         ),
         backgroundColor: const Color(0xFF9346A1),
         centerTitle: true,
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ),
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: Icon(Icons.add, color: Colors.white, size: 33), // Burada size parametresini ekledim
-            tooltip: 'Kayıp Hayvan İlan Ver',
+            icon: const Icon(Icons.add, color: Colors.white, size: 33),
+            tooltip: 'Kayıp Hayvan İlanı Ver',
             onPressed: () {
               Navigator.push(
                 context,
@@ -69,31 +65,80 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _buildCategoryButton("Tümü"),
-                    _buildStackedCategoryButton("Kedi", "İlanları"),
-                    _buildStackedCategoryButton("Köpek", "İlanları"),
+                    _buildStackedCategoryButton("Kedi"),
+                    _buildStackedCategoryButton("Köpek"),
                   ],
                 ),
-                SizedBox(height: 16), // Boşluk eklendi
-                Text(
-                  "Sonuçlar en yakından en uzağa sıralanmıştır.",
-                  style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w500),
-                  textAlign: TextAlign.center,
+                const SizedBox(height: 10), // Boşluk ekleyelim
+
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 5,
+                        spreadRadius: 1,
+                      )
+                    ],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedCity,
+                    isExpanded: true,
+                    menuMaxHeight: 250, // Maksimum yükseklik (5 şehir gösterir)
+                    icon: const Icon(Icons.arrow_drop_down, color: Colors.purple), // 🎨 Şık ikon
+                    decoration: const InputDecoration(border: InputBorder.none), // Alt çizgiyi kaldır
+                    style: GoogleFonts.poppins(fontSize: 16, color: Colors.black87),
+                    items: _cityList.map((String city) {
+                      return DropdownMenuItem<String>(
+                        value: city,
+                        child: Text(city),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedCity = value!;
+                      });
+                    },
+                  ),
                 ),
               ],
             ),
           ),
           Expanded(
-            child: ListView(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 1), // 18'di, 4 yaptık
-              children: lostPets
-                  .where((pet) {
-                if (selectedCategory == "Tümü") return true;
-                if (selectedCategory == "Kedi İlanları" && pet['type'] == 'kedi') return true;
-                if (selectedCategory == "Köpek İlanları" && pet['type'] == 'köpek') return true;
-                return false;
-              })
-                  .map((pet) => _buildLostPetCard(pet))
-                  .toList(),
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('lost_pets').orderBy('timestamp', descending: true).snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Center(
+                    child: Text(
+                      "Henüz kayıp hayvan ilanı eklenmedi.",
+                      style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey),
+                    ),
+                  );
+                }
+
+                var lostPets = snapshot.data!.docs.where((doc) {
+                  String type = doc['petType'] ?? 'Tümü';
+                  String city = doc['city'] ?? 'Tümü';
+
+                  bool categoryMatch = selectedCategory == 'Tümü' || type == selectedCategory.split(" ")[0];
+                  bool cityMatch = _selectedCity == "Tümü" || city == _selectedCity;
+
+                  return categoryMatch && cityMatch;
+                }).toList();
+
+
+                return ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  children: lostPets.map((doc) => _buildLostPetCard(doc.data() as Map<String, dynamic>)).toList(),
+                );
+              },
             ),
           ),
         ],
@@ -101,14 +146,14 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
     );
   }
 
-  Widget _buildStackedCategoryButton(String topText, String bottomText) {
+  Widget _buildStackedCategoryButton(String topText) {
     bool isSelected = selectedCategory.contains(topText);
 
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: isSelected ? Colors.deepPurple : Colors.grey, width: 2),
@@ -116,13 +161,12 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
       ),
       onPressed: () {
         setState(() {
-          selectedCategory = "$topText İlanları";
+          selectedCategory = "$topText";
         });
       },
       child: Column(
         children: [
           Text(topText, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold)),
-          Text(bottomText, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[700])),
         ],
       ),
     );
@@ -135,7 +179,7 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: isSelected ? Colors.deepPurple : Colors.grey, width: 2),
@@ -151,26 +195,64 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
   }
 
   Widget _buildLostPetCard(Map<String, dynamic> pet) {
-    String imagePath = pet['type'] == 'kedi' ? 'assets/images/kayipkedi.jpg' : 'assets/images/kayipkopek.jpeg';
+    String? imageUrl = pet['imageUrl']; // Firebase'den gelen URL
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      margin: EdgeInsets.symmetric(vertical: 12),
+      margin: const EdgeInsets.symmetric(vertical: 12),
       elevation: 6,
       child: Padding(
-        padding: EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(12.0),
         child: Row(
           children: [
             GestureDetector(
               onTap: () {
-                _showImagePopup(context, imagePath);
+                _showImagePopup(context, imageUrl ?? _getDefaultImage(pet['petType']));
               },
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(15),
-                child: Image.asset(imagePath, fit: BoxFit.cover, height: 200, width: 200),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(15),
+                    child: imageUrl != null && imageUrl.isNotEmpty
+                        ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      height: 200,
+                      width: 200,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const SizedBox(
+                          width: 200,
+                          height: 200,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.purple, // 🎨 Mor renkli yükleniyor çemberi
+                              strokeWidth: 5, // Daha kalın çember
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Image.asset(
+                          _getDefaultImage(pet['petType']),
+                          fit: BoxFit.cover,
+                          height: 200,
+                          width: 200,
+                        );
+                      },
+                    )
+                        : Image.asset(
+                      _getDefaultImage(pet['petType']),
+                      fit: BoxFit.cover,
+                      height: 200,
+                      width: 200,
+                    ),
+                  ),
+                ],
               ),
             ),
-            SizedBox(width: 18),
+            const SizedBox(width: 18),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,29 +261,22 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
                     pet['petName'] ?? "Bilinmeyen",
                     style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black),
                   ),
-                  SizedBox(height: 6),
+                  const SizedBox(height: 6),
                   Text(
                     "📍 ${pet['location'] ?? 'Bilinmiyor'}",
                     style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey[700]),
                   ),
-                  SizedBox(height: 12),
+                  const SizedBox(height: 12),
                   ElevatedButton.icon(
                     onPressed: () {
-                      _makePhoneCall(pet['phoneNumber']);
+                      _makePhoneCall(pet['phone']);
                     },
-                    icon: Icon(Icons.phone, color: Colors.white), // İkonu beyaz yaptım
-                    label: Text(
-                      "Ara",
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white, // Yazıyı beyaz yaptım
-                      ),
-                    ),
+                    icon: const Icon(Icons.phone, color: Colors.white),
+                    label: const Text("Ara", style: TextStyle(color: Colors.white)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.black,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
                     ),
                   ),
                 ],
@@ -213,7 +288,27 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
     );
   }
 
-  void _showImagePopup(BuildContext context, String imagePath) {
+
+  // 🔥 PET TÜRÜNE GÖRE VARSAYILAN RESMİ SEÇEN FONKSİYON
+  String _getDefaultImage(String? petType) {
+    if (petType == "Kedi") {
+      return 'assets/images/kayipkedi.jpg';
+    } else if (petType == "Köpek") {
+      return 'assets/images/kayipkopek.jpeg';
+    } else {
+      return 'assets/images/default_pet.jpg'; // Eğer bilinmeyen bir türse genel bir varsayılan resim koy
+    }
+  }
+
+
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri phoneUri = Uri.parse("tel:$phoneNumber");
+    if (await canLaunchUrl(phoneUri)) {
+      await launchUrl(phoneUri);
+    }
+  }
+
+  void _showImagePopup(BuildContext context, String imageUrl) {
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -226,7 +321,20 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
               Center(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: Image.asset(imagePath, width: 500, height: 500, fit: BoxFit.contain),
+                  child: Image.network(
+                    imageUrl,
+                    width: 500,
+                    height: 500,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Image.asset(
+                        'assets/images/default_pet.jpg', // Varsayılan resim
+                        width: 500,
+                        height: 500,
+                        fit: BoxFit.contain,
+                      );
+                    },
+                  ),
                 ),
               ),
               Positioned(
@@ -234,7 +342,7 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
                 right: 10,
                 child: GestureDetector(
                   onTap: () => Navigator.pop(context),
-                  child: Icon(Icons.close, color: Colors.white, size: 32),
+                  child: const Icon(Icons.close, color: Colors.white, size: 32),
                 ),
               ),
             ],
@@ -244,14 +352,5 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
     );
   }
 
-  Future<void> _makePhoneCall(String phoneNumber) async {
-    final Uri phoneUri = Uri.parse("tel:$phoneNumber");
-    if (await canLaunchUrl(phoneUri)) {
-      await launchUrl(phoneUri);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Arama yapılamıyor")),
-      );
-    }
-  }
+
 }

@@ -372,13 +372,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           centerTitle: true,
           elevation: 0,
+          iconTheme: IconThemeData(color: Colors.white), // İkon rengini kontrol et
+          automaticallyImplyLeading: false, // 🔥 Geri butonunu tamamen kaldır!
           actions: [
             IconButton(
               icon: const Icon(Icons.notifications, color: Colors.white),
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const NotificationScreen()),
+                Navigator.push( context,MaterialPageRoute(builder: (context) => const NotificationScreen()),
                 );
               },
             ),
@@ -524,7 +524,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.white70,
+                      color: Colors.black26,
                       borderRadius: BorderRadius.circular(15),
                     ),
                     child: GestureDetector(
@@ -559,7 +559,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 MaterialPageRoute(builder: (context) => AddFeedingPointScreen()),
               );
             },
-            child: Image.asset('assets/images/pet-food.png', width: 38),
+            child: Image.asset('assets/images/pet-food1.png', width: 41),
           ),
           const SizedBox(height: 10),
           FloatingActionButton(
@@ -570,7 +570,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 MaterialPageRoute(builder: (context) => AddCathouseScreen()),
               );
             },
-            child: Image.asset('assets/images/cathouse.png', width: 38),
+            child: Image.asset('assets/images/pethouse2.png', width: 39),
           ),
           const SizedBox(height: 10),
           FloatingActionButton(
@@ -664,15 +664,28 @@ class _HomeScreenState extends State<HomeScreen> {
     Timestamp newTimestamp = Timestamp.now();
 
     try {
+      // **1️⃣ Besleme noktasının lastFilled değerini güncelle**
       await _firestore.collection('feedPoints').doc(_selectedPoint).update({
         'lastFilled': newTimestamp,
       });
 
+      // **2️⃣ Kullanıcının mama doldurma kaydını ekle**
+      await _firestore.collection('feeding_records').add({
+        'userId': userID,
+        'feedPointId': _selectedPoint,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // **3️⃣ Kullanıcının `mamaDoldurmaSayisi` değerini artır**
+      await _firestore.collection('users').doc(userID).update({
+        'mamaDoldurmaSayisi': FieldValue.increment(1), // 🔥 Kullanıcı mama doldurdukça 1 artır
+      });
+
+      // **4️⃣ Kullanıcıya puan ekle**
       await _addPoints(userID, 3);
 
-      print("✅ $_selectedPoint için lastFilled güncellendi!");
+      print("✅ $_selectedPoint için lastFilled, feeding_records ve kullanıcı sayısı güncellendi!");
 
-      // **🔥 Artık elle çağırmaya gerek yok! Firestore değişikliği kendisi tetikleyecek**
       setState(() {
         _selectedLastFilled = newTimestamp;
         _fillCompleted = true;
@@ -682,6 +695,7 @@ class _HomeScreenState extends State<HomeScreen> {
       print("❌ Hata: $_selectedPoint lastFilled güncellenemedi! Hata: $e");
     }
   }
+
 
 
   void _listenForMarkerUpdates() {

@@ -1,19 +1,23 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Firebase Auth eklendi
-import 'screens/home_screens/home_screen.dart'; // Ana sayfa
-import 'screens/community_screens/community_screen.dart'; // Topluluk sayfası
-import 'screens/profile_screens/profile_screen.dart'; // Profil sayfası
-import 'screens/login_screens/login_screen.dart'; // Giriş ekranı eklendi
+import 'package:firebase_auth/firebase_auth.dart';
+import 'screens/home_screens/home_screen.dart';
+import 'screens/community_screens/community_screen.dart';
+import 'screens/profile_screens/profile_screen.dart';
+import 'screens/login_screens/login_screen.dart';
 import 'firebase_options.dart';
-import 'services/auth_service.dart'; // AuthService dahil edildi
+import 'services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(const MyApp());
+
+  // ✅ Splash ekranını 3 saniye açık tutalım
+  Future.delayed(Duration(seconds: 3), () {
+    runApp(const MyApp());
+  });
 }
 
 class MyApp extends StatelessWidget {
@@ -26,20 +30,19 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
       ),
-      debugShowCheckedModeBanner: false, // Debug yazısını kaldırmak için
+      debugShowCheckedModeBanner: false,
 
-      // Kullanıcının giriş yapıp yapmadığını kontrol et
       home: StreamBuilder<User?>(
-        stream: AuthService().authStateChanges, // Kullanıcı durumunu dinliyoruz
+        stream: AuthService().authStateChanges,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.active) {
             if (snapshot.hasData) {
-              return const HomePage(); // Kullanıcı giriş yaptıysa HomePage aç
+              return const HomePage();
             } else {
-              return LoginScreen(); // Kullanıcı giriş yapmadıysa LoginScreen aç
+              return LoginScreen();
             }
           }
-          return const Center(child: CircularProgressIndicator()); // Yüklenme ekranı
+          return const Center(child: CircularProgressIndicator());
         },
       ),
     );
@@ -53,9 +56,9 @@ class HomePage extends StatefulWidget {
   _HomePageState createState() => _HomePageState();
 }
 
-class SelectedIndex{
+class SelectedIndex {
   static int index = 0;
-  static void changeSelectedIndex(int _selectedIndex){
+  static void changeSelectedIndex(int _selectedIndex) {
     index = _selectedIndex;
   }
 }
@@ -74,6 +77,12 @@ class _HomePageState extends State<HomePage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: _screens[SelectedIndex.index],
@@ -85,15 +94,15 @@ class _HomePageState extends State<HomePage> {
         items: <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Image.asset('assets/images/zoology.png', width: SelectedIndex.index == 0 ? 30 : 25),
-            label: '', // Etiketleri boş bırakıyoruz
+            label: '',
           ),
           BottomNavigationBarItem(
             icon: Image.asset('assets/images/comment.png', width: SelectedIndex.index == 1 ? 30 : 25),
-            label: '', // Etiketleri boş bırakıyoruz
+            label: '',
           ),
           BottomNavigationBarItem(
             icon: Image.asset('assets/images/user2.png', width: SelectedIndex.index == 2 ? 30 : 25),
-            label: '', // Etiketleri boş bırakıyoruz
+            label: '',
           ),
         ],
       ),

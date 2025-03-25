@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import 'chat_screen.dart';
 
 class MessagesScreen extends StatefulWidget {
@@ -16,11 +15,20 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    String? currentUserEmail = _auth.currentUser?.email;
+
+    if (currentUserEmail == null) {
+      return Scaffold(
+        appBar: AppBar(title: Text("Sohbetler")),
+        body: Center(child: Text("Giriş yapmadınız!")),
+      );
+    }
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Color(0xFFF0E6F4),
       appBar: AppBar(
         title: Text(
-          'Gelen Mesajlar',
+          'Mesajlarım',
           style: GoogleFonts.montserrat(
             fontWeight: FontWeight.w900,
             fontSize: 24,
@@ -29,118 +37,128 @@ class _MessagesScreenState extends State<MessagesScreen> {
         ),
         backgroundColor: Color(0xFF9346A1),
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: Colors.white),
       ),
       body: StreamBuilder(
         stream: _firestore
             .collection('messages')
-            .where('receiverId', isEqualTo: _auth.currentUser?.uid)
+            .where('users', arrayContains: currentUserEmail)
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
           if (snapshot.hasError) {
-            print("DEBUG ERROR: Firestore Hatası: ${snapshot.error}");
             return Center(child: Text("Bir hata oluştu: ${snapshot.error}"));
           }
-
-          if (!snapshot.hasData) {
-            print("DEBUG: Veri çekilmiyor, yükleniyor...");
-            return Center(child: CircularProgressIndicator());
-          }
-
-          var messages = snapshot.data!.docs;
-
-          if (messages.isEmpty) {
-            print("DEBUG: Mesaj bulunamadı.");
-            print("DEBUG: Giriş yapan kullanıcının UID'si: ${_auth.currentUser?.uid}");
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return Center(
               child: Text(
-                "Henüz mesajınız yok.",
+                "Henüz sohbetiniz yok.",
                 style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey[700]),
               ),
             );
           }
 
-          print("DEBUG: ${messages.length} mesaj bulundu.");
+          var chats = snapshot.data!.docs;
+
           return ListView.builder(
             padding: EdgeInsets.all(12.0),
-            itemCount: messages.length,
+            itemCount: chats.length,
             itemBuilder: (context, index) {
-              var message = messages[index].data() as Map<String, dynamic>;
+              var chat = chats[index].data() as Map<String, dynamic>;
+              String chatId = chats[index].id;
+              String lastMessage = chat['lastMessage'] ?? "Henüz mesaj yok";
+              bool isRead = chat['lastMessageReadBy']?.contains(currentUserEmail) ?? false;
 
-              String senderId = message['senderId'] ?? "Bilinmeyen Kullanıcı";
-              String messageText = message['message'] ?? "Mesaj içeriği yok";
-              bool isRead = message['isRead'] ?? false;
+              String receiverEmail = (chat['users'] as List)
+                  .firstWhere((email) => email != currentUserEmail, orElse: () => "Bilinmeyen");
 
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ChatScreen(
-                        receiverId: message['senderId'],
-                        receiverName: message['senderId'], // Gerçek isim çekmek için kullanıcı verisi eklenebilir
+              return FutureBuilder<QuerySnapshot>(
+                future: _firestore.collection('users').where('email', isEqualTo: receiverEmail).get(),
+                builder: (context, userSnapshot) {
+                  String receiverName = "Bilinmeyen Kullanıcı";
+                  String profilePic = "https://cdn-icons-png.flaticon.com/512/847/847969.png"; // Varsayılan avatar
+
+                  if (userSnapshot.hasData && userSnapshot.data!.docs.isNotEmpty) {
+                    var userData = userSnapshot.data!.docs.first.data() as Map<String, dynamic>;
+                    receiverName = "${userData['firstName']} ${userData['lastName']}";
+
+                    if (userData['profileUrl'] != null && userData['profileUrl'].isNotEmpty) {
+                      profilePic = userData['profileUrl'];
+                    }
+                  }
+
+                  return GestureDetector(
+                    onTap: () async {
+                      await _markMessagesAsRead(chatId);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChatScreen(receiverEmail: receiverEmail),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      margin: EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                      padding: EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 10,
+                            spreadRadius: 3,
+                            offset: Offset(3, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 35,
+                            backgroundImage: NetworkImage(profilePic),
+                            backgroundColor: Colors.grey[300],
+                          ),
+                          SizedBox(width: 18),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  receiverName,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                SizedBox(height: 6),
+                                Text(
+                                  lastMessage,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    color: Colors.grey[700],
+                                    fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == "delete_chat") _deleteChat(chatId);
+                            },
+                            itemBuilder: (context) => [
+                              PopupMenuItem(value: "delete_chat", child: Text("Sohbeti Sil")),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   );
                 },
-                child: Container(
-                  padding: EdgeInsets.all(12),
-                  margin: EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.2),
-                        blurRadius: 20,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: Colors.purple[300],
-                        child: Text(
-                          senderId.substring(0, 1),
-                          style: GoogleFonts.poppins(fontSize: 18, color: Colors.white),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              senderId,
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              messageText,
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.delete, color: Colors.red),
-                        onPressed: () {
-                          _deleteMessage(messages[index].id);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
               );
             },
           );
@@ -149,13 +167,24 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
-  // Mesajı "okundu" olarak işaretle
-  void _markMessageAsRead(String messageId) {
-    _firestore.collection('messages').doc(messageId).update({'isRead': true});
+  Future<void> _markMessagesAsRead(String chatId) async {
+    await _firestore.collection('messages').doc(chatId).update({
+      'lastMessageReadBy': FieldValue.arrayUnion([_auth.currentUser?.email]),
+    });
   }
 
-  // Mesajı Firestore'dan sil
-  void _deleteMessage(String messageId) {
-    _firestore.collection('messages').doc(messageId).delete();
+  void _deleteChat(String chatId) async {
+    var messages = await _firestore.collection('messages').doc(chatId).collection('messages').get();
+    for (var doc in messages.docs) {
+      await doc.reference.delete();
+    }
+
+    await _firestore.collection('messages').doc(chatId).delete();
+
+    print("✅ Sohbet tamamen silindi: $chatId");
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 }
