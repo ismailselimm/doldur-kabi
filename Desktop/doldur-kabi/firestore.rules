@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 🔥 Besleme noktalarını HERKES okuyabilir, ancak sadece giriş yapan kullanıcılar güncelleyebilir!
+    match /feedPoints/{docId} {
+      allow read: if true;
+      allow update: if request.auth != null;  // Kullanıcı giriş yapmışsa güncelleyebilir
+      allow write: if request.auth != null;  // Yeni eklemek için giriş gereksin
+    }
+
+    // 🔥 Hayvan evlerini HERKES okuyabilir!
+    match /animalHouses/{docId} {
+      allow read: if true;
+      allow update: if request.auth != null;  
+      allow write: if request.auth != null;
+    }
+    
+     match /vetApplications/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null; // Sadece giriş yapanlar yazabilir
+    }
+
+    // 🔥 Diğer koleksiyonlar aynı kalabilir
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+     match /messages/{document=**} {
+      allow read, write: if true; // 👈 Geçici olarak her şeyi açar (Güvenli değil ama test için kullan)
+    }
+  }
+}
+

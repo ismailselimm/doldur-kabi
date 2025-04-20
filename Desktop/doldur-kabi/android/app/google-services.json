@@ -1,0 +1,62 @@
+{
+  "project_info": {
+    "project_number": "618741724404",
+    "project_id": "doldur-kabi-48e54",
+    "storage_bucket": "doldur-kabi-48e54.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:618741724404:android:8d00a77a5bfe551ee5daa1",
+        "android_client_info": {
+          "package_name": "com.example.doldur_kabi"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "618741724404-mcjetm6aufpqj8na5dnqtc764oibk840.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.doldur_kabi",
+            "certificate_hash": "495515bd8246f4ae14eb59943d2fd27b1a6644d1"
+          }
+        },
+        {
+          "client_id": "618741724404-o4l17m39grak5tt92bv1qt9cv7d9b80b.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.doldur_kabi",
+            "certificate_hash": "c55432885577bd88684652d0cb3447b808f3d640"
+          }
+        },
+        {
+          "client_id": "618741724404-vc4eoganei10gru49jrdr95lmrg9lsct.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCT7OlAJbQV8AYIMgxvsXoWp4FbhtT9qBk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "618741724404-vc4eoganei10gru49jrdr95lmrg9lsct.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "618741724404-3pi2ga6072voe25j3fnibngnsfkv482h.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.ismailselim.doldurKabi"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
