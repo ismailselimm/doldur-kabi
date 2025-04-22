@@ -167,6 +167,9 @@ class _AdminFeedbackControlScreenState extends State<AdminFeedbackControlScreen>
                     _buildRow("Tür", data['type'] ?? '-'),
                     _buildRow("Sebep", data['reason'] ?? '-'),
                     _buildRow("Bildiren", data['reportedBy'] ?? '-'),
+                    if (data.containsKey('reportedUser')) ...[
+                      _buildRow("Şikayet Edilen", data['reportedUser']['email'] ?? '-'),
+                    ],
                   ] else ...[
                     Text(data['userDisplayName'] ?? "Bilinmeyen Kullanıcı",
                         style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.deepPurple)),

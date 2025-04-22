@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:doldur_kabi/screens/community_screens/user_profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -81,22 +82,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
 
   @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(60),
         child: AppBar(
           backgroundColor: const Color(0xFF9346A1),
-        /*  leading: IconButton(
-            icon: const FaIcon(FontAwesomeIcons.trophy, color: Colors.white, size: 23),
-            tooltip: 'Puan Tablosu',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => LeaderboardScreen()),
-              );
-            },
-          ), */
           title: Text(
             'Topluluk',
             style: GoogleFonts.montserrat(
@@ -105,12 +97,12 @@ class _CommunityScreenState extends State<CommunityScreen> {
               color: Colors.white,
             ),
           ),
-          automaticallyImplyLeading: false, // 🔥 Geri butonunu tamamen kaldır!
+          automaticallyImplyLeading: false,
           centerTitle: true,
           elevation: 0,
           actions: [
             IconButton(
-              icon: const Icon(Icons.volunteer_activism, color: Colors.white, size: 25,),
+              icon: const Icon(Icons.volunteer_activism, color: Colors.white, size: 25),
               tooltip: 'Sahiplen',
               onPressed: () {
                 Navigator.push(
@@ -120,7 +112,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
               },
             ),
             IconButton(
-              icon: const FaIcon(FontAwesomeIcons.triangleExclamation, color: Colors.white, size: 23), // Kayıp Hayvanlar
+              icon: const FaIcon(FontAwesomeIcons.triangleExclamation, color: Colors.white, size: 23),
               tooltip: 'Kayıp Hayvanlar',
               onPressed: () {
                 Navigator.push(
@@ -132,50 +124,51 @@ class _CommunityScreenState extends State<CommunityScreen> {
           ],
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('posts')
-              .orderBy('createdAt', descending: true)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return Center(child: CircularProgressIndicator());
-            }
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('posts')
+                .orderBy('createdAt', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-            var posts = snapshot.data!.docs;
+              var posts = snapshot.data!.docs;
 
-            return ListView.builder(
-              itemCount: posts.length,
-              itemBuilder: (context, index) {
-                var post = posts[index];
+              return ListView.builder(
+                itemCount: posts.length,
+                itemBuilder: (context, index) {
+                  var post = posts[index];
+                  var postData = post.data() as Map<String, dynamic>;
 
-                var postData = post.data() as Map<String, dynamic>;
-
-                return _buildPostCard(
-                  context,
-                  postId: post.id,
-                  username: postData['username'] ?? "Bilinmeyen Kullanıcı",
-                  userImage: postData['userImage'] ?? "https://via.placeholder.com/150",
-                  postImage: postData['imageUrl'] ?? "https://via.placeholder.com/300",
-                  postDescription: postData['description'] ?? "",
-                  likes: postData['likes'] ?? 0,
-                  comments: postData['comments'] ?? 0,
-                  likedBy: List<String>.from(postData['likedBy'] ?? []),
-                  createdAt: postData.containsKey('createdAt') && postData['createdAt'] is Timestamp
-                      ? postData['createdAt']
-                      : Timestamp.now(), // 🔥 Burayı ekledik!
-                );
-              },
-            );
-          },
+                  return _buildPostCard(
+                    context,
+                    postId: post.id,
+                    postOwnerId: postData['userId'] ?? "",
+                    postOwnerEmail: postData['email'] ?? "",
+                    username: postData['username'] ?? "Bilinmeyen Kullanıcı",
+                    userImage: postData['userImage'] ?? "https://via.placeholder.com/150",
+                    postImage: postData['imageUrl'] ?? "https://via.placeholder.com/300",
+                    postDescription: postData['description'] ?? "",
+                    likes: postData['likes'] ?? 0,
+                    comments: postData['comments'] ?? 0,
+                    likedBy: List<String>.from(postData['likedBy'] ?? []),
+                    createdAt: postData['createdAt'] ?? Timestamp.now(),
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF9346A1),
         child: const FaIcon(FontAwesomeIcons.edit, color: Colors.white, size: 23),
-      onPressed: () {
+        onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => CreatePostScreen()),
@@ -184,6 +177,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
       ),
     );
   }
+
+
 
 
   Widget _buildPostCard(
@@ -196,14 +191,19 @@ class _CommunityScreenState extends State<CommunityScreen> {
         required int likes,
         required int comments,
         required List<String> likedBy,
-        required Timestamp createdAt, // Zamanı ekledik!
-      }) {
+        required Timestamp createdAt,
+        required String postOwnerId,
+        required String postOwnerEmail, // 💥 burası
+      })
+  {
+
     final User? user = FirebaseAuth.instance.currentUser;
     final bool isLiked = user != null && likedBy.contains(user.email);
 
+
     return Card(
-      elevation: 10,
-      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 8,
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), // 🔥 YANLARA BOŞLUK
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
@@ -213,11 +213,24 @@ class _CommunityScreenState extends State<CommunityScreen> {
           ListTile(
             trailing: IconButton(
               icon: const Icon(Icons.more_vert, color: Colors.grey),
-              onPressed: () => _showPostOptions(context, postId),
+              onPressed: () => _showPostOptions(context, postId, postOwnerId),
             ),
-            leading: CircleAvatar(
-              backgroundImage: NetworkImage(userImage),
-              radius: 24,
+            leading: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UserProfileScreen(
+                      userId: postOwnerId,
+                      userEmail: postOwnerEmail,
+                    ),
+                  ),
+                );
+              },
+              child: CircleAvatar(
+                backgroundImage: NetworkImage(userImage),
+                radius: 24,
+              ),
             ),
             title: Text(
               username,
@@ -378,7 +391,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
   }
 
-  void _showReportDialog(BuildContext context, String postId) {
+  Future<void> _showReportDialog(BuildContext context, String postId, String reportedUserId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -432,13 +445,25 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       : () async {
                     Navigator.pop(ctx);
 
+                    final postSnapshot = await FirebaseFirestore.instance.collection('posts').doc(postId).get();
+                    final postData = postSnapshot.data();
+                    final reportedUserId = postData?['userId'] ?? 'bilinmiyor';
+
+                    final reportedUserSnapshot = await FirebaseFirestore.instance.collection('users').doc(reportedUserId).get();
+                    final reportedUserData = reportedUserSnapshot.data();
+
                     await FirebaseFirestore.instance.collection('complaints').add({
                       'type': 'Gönderi',
                       'contentId': postId,
                       'reportedBy': user.email,
                       'reason': selectedReason,
                       'timestamp': FieldValue.serverTimestamp(),
+                      'reportedUser': {
+                        'id': postData?['userId'], // bu alana erişimin varsa
+                        'email': reportedUserData?['email'] ?? 'Bilinmiyor',
+                      },
                     });
+
 
                     showGeneralDialog(
                       context: context,
@@ -521,9 +546,19 @@ class _CommunityScreenState extends State<CommunityScreen> {
         );
       },
     );
+
+    // Kullanıcı bilgilerini çek
+    final reportedUserSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(reportedUserId)
+        .get();
+
+    final reportedUserData = reportedUserSnapshot.data();
+
+
   }
 
-  void _showPostOptions(BuildContext context, String postId) {
+  void _showPostOptions(BuildContext context, String postId, String postOwnerId) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -549,7 +584,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 title: const Text("Bu gönderiyi bildir"),
                 onTap: () {
                   Navigator.pop(context);
-                  _showReportDialog(context, postId);
+                  _showReportDialog(context, postId, postOwnerId);
                 },
               ),
               const SizedBox(height: 10),

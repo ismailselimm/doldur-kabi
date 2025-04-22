@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:doldur_kabi/screens/home_screens/vet_application_screen.dart';
+import 'package:doldur_kabi/screens/home_screens/volunteer_vets_map_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -10,8 +12,8 @@ class NearbyVetsScreen extends StatefulWidget {
 }
 
 class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
-  bool _isSorted = true; // Default olarak en yakın başlasın
-  List<Map<String, dynamic>> vets = []; // 🔥 Firestore'dan gelecek olan veriler
+  bool _isSorted = true;
+  List<Map<String, dynamic>> vets = [];
 
   @override
   void initState() {
@@ -22,23 +24,13 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
   Future<void> _fetchVetsFromFirestore() async {
     FirebaseFirestore firestore = FirebaseFirestore.instance;
     try {
-      print("🚀 Firestore'dan veterinerler çekiliyor...");
-
       QuerySnapshot snapshot = await firestore
           .collection('vetApplications')
-          .where('status', isEqualTo: 'approved') // 🔥 Sadece onaylananları al
+          .where('status', isEqualTo: 'approved')
           .get();
-
-      if (snapshot.docs.isEmpty) {
-        print("⚠️ Firestore'da hiç onaylı veteriner bulunamadı!");
-      } else {
-        print("✅ ${snapshot.docs.length} tane onaylı veteriner bulundu!");
-      }
 
       List<Map<String, dynamic>> fetchedVets = snapshot.docs.map((doc) {
         var data = doc.data() as Map<String, dynamic>;
-        print("📌 Veteriner: ${data['businessName']} - ${data['address']} - ${data['phone']}");
-
         return {
           "name": data['businessName'] ?? "Bilinmeyen Veteriner",
           "address": data['address'] ?? "Adres belirtilmemiş",
@@ -51,7 +43,6 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
         _sortVets();
       });
     } catch (e) {
-      print("❌ Firestore'dan veri çekerken hata oluştu: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Veterinerleri yüklerken hata oluştu: $e"),
@@ -61,11 +52,11 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
     }
   }
 
-
   void _sortVets() {
     setState(() {
       _isSorted = !_isSorted;
-      vets.sort((a, b) => _isSorted ? a['name'].compareTo(b['name']) : b['name'].compareTo(a['name']));
+      vets.sort((a, b) =>
+      _isSorted ? a['name'].compareTo(b['name']) : b['name'].compareTo(a['name']));
     });
   }
 
@@ -84,9 +75,7 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ),
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: const Icon(Icons.add, color: Colors.white, size: 33),
@@ -100,7 +89,7 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
         ],
       ),
       body: vets.isEmpty
-          ? const Center(child: CircularProgressIndicator()) // 🔥 Veriler yüklenene kadar beklet
+          ? const Center(child: CircularProgressIndicator())
           : Column(
         children: [
           Padding(
@@ -110,7 +99,8 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
               children: [
                 Text(
                   "Filtrele:",
-                  style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.poppins(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 ElevatedButton(
                   onPressed: _sortVets,
@@ -118,13 +108,17 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
-                      side: const BorderSide(color: Color(0xFF9346A1), width: 2),
+                      side: const BorderSide(
+                          color: Color(0xFF9346A1), width: 2),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
                   ),
                   child: Text(
                     _isSorted ? "En Uzak" : "En Yakın",
-                    style: const TextStyle(color: Color(0xFF9346A1), fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        color: Color(0xFF9346A1),
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -140,7 +134,8 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
                   child: ListTile(
                     title: Text(
                       vet['name'],
-                      style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.poppins(
+                          fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
                       vet['address'],
@@ -152,12 +147,14 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
                         IconButton(
                           icon: const Icon(Icons.phone, color: Colors.green),
                           onPressed: () async {
-                            final Uri phoneUri = Uri(scheme: 'tel', path: vet['phone']);
+                            final Uri phoneUri =
+                            Uri(scheme: 'tel', path: vet['phone']);
                             if (await canLaunchUrl(phoneUri)) {
                               await launchUrl(phoneUri);
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Telefon araması başlatılamıyor.")),
+                                const SnackBar(
+                                    content: Text("Telefon araması başlatılamıyor.")),
                               );
                             }
                           },
@@ -169,13 +166,17 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
                               scheme: 'https',
                               host: 'www.google.com',
                               path: '/maps/search/',
-                              queryParameters: {'api': '1', 'query': vet['address']},
+                              queryParameters: {
+                                'api': '1',
+                                'query': vet['address']
+                              },
                             );
                             if (await canLaunchUrl(mapsUri)) {
                               await launchUrl(mapsUri);
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Yol tarifi açılamıyor.")),
+                                const SnackBar(
+                                    content: Text("Yol tarifi açılamıyor.")),
                               );
                             }
                           },
@@ -185,6 +186,38 @@ class _NearbyVetsScreenState extends State<NearbyVetsScreen> {
                   ),
                 );
               },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24.0),
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => VolunteerVetsMapScreen(),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Text(
+                    "Haritada Göster",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(width: 10),
+                  FaIcon(FontAwesomeIcons.mapLocationDot, color: Colors.white),
+                ],
+              ),
             ),
           ),
         ],

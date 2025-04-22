@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:doldur_kabi/screens/community_screens/user_profile_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -151,6 +152,7 @@ class _AdoptionScreenState extends State<AdoptionScreen> {
                     .collection('adoption_posts')
                     .orderBy('timestamp', descending: true)
                     .snapshots(),
+
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return Center(child: CircularProgressIndicator());
@@ -401,13 +403,33 @@ class _AdoptionScreenState extends State<AdoptionScreen> {
             // 👤 Kullanıcı Bilgisi (Adı + Şehir)
             Row(
               children: [
-                Icon(FontAwesomeIcons.userLarge, size: 15, color: Colors.black), // 👤 Person iconu
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    '${adopt['ownerName'] ?? "Bilinmiyor"} - ${adopt['city'] ?? "Şehir Belirtilmemiş"}',
-                    style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => UserProfileScreen(
+                          userId: adopt['ownerId'], // Firestore'da kayıtlı kullanıcı ID'si
+                          userEmail: adopt['ownerEmail'],
+                        ),
+                      ),
+                    );
+                  },
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundImage: (adopt['ownerProfileUrl'] != null && adopt['ownerProfileUrl'].toString().isNotEmpty)
+                            ? NetworkImage(adopt['ownerProfileUrl'].toString())
+                            : const AssetImage('assets/images/avatar1.png') as ImageProvider<Object>,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${adopt['ownerName'] ?? "Bilinmiyor"} - ${adopt['city'] ?? "Şehir Belirtilmemiş"}',
+                        style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -429,7 +451,6 @@ class _AdoptionScreenState extends State<AdoptionScreen> {
                 label: const Text('Mesaj Gönder', style: TextStyle(color: Colors.white)),
               ),
             ),
-            const SizedBox(height: 8),
 
             Align(
               alignment: Alignment.center,
@@ -439,8 +460,6 @@ class _AdoptionScreenState extends State<AdoptionScreen> {
                 label: Text("Bu ilanı bildir", style: GoogleFonts.poppins(color: Colors.redAccent)),
               ),
             ),
-
-
           ],
         ),
       ),
@@ -501,13 +520,22 @@ class _AdoptionScreenState extends State<AdoptionScreen> {
                       : () async {
                     Navigator.pop(ctx);
 
+                    final reportedUserId = postData['ownerId'];
+                    final reportedUserSnapshot = await FirebaseFirestore.instance.collection('users').doc(reportedUserId).get();
+                    final reportedUserData = reportedUserSnapshot.data();
+
                     await FirebaseFirestore.instance.collection('complaints').add({
                       'type': 'Sahiplendirme',
                       'contentId': postData['id'] ?? '',
                       'reportedBy': user.email,
                       'reason': selectedReason,
                       'timestamp': FieldValue.serverTimestamp(),
+                      'reportedUser': {
+                        'id': reportedUserId,
+                        'email': reportedUserData?['email'] ?? 'Bilinmiyor',
+                      }
                     });
+
 
                     // 👇 Kısa gecikme ekliyoruz
                     await Future.delayed(const Duration(milliseconds: 100));

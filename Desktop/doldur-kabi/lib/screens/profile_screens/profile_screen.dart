@@ -328,7 +328,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           _buildProfileStat("Hayvan Evi", "$hayvanEviSayisi", Colors.teal, FontAwesomeIcons.houseChimney),
-                          _buildProfileStat("Gönderi Paylaşma", "$gonderiSayisi", Colors.orange, FontAwesomeIcons.paperPlane),
+                          _buildProfileStat("Gönderi Paylaşma", "$gonderiSayisi", Colors.orange, FontAwesomeIcons.image),
                         ],
                       ),
                     ],

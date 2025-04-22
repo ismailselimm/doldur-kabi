@@ -140,10 +140,14 @@ class _AdoptionPostScreenState extends State<AdoptionPostScreen> {
   }
 
   Future<void> _savePostToFirestore(User user, String imageUrl) async {
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final userData = userDoc.data();
+
     await FirebaseFirestore.instance.collection('adoption_posts').add({
       'ownerId': user.uid,
-      'ownerEmail': user.email, // 🔥 Kullanıcının emailini ekle!
+      'ownerEmail': user.email,
       'ownerName': _ownerNameController.text,
+      'ownerProfileUrl': userData?['profileUrl'], // 🔥 Profil fotoğrafını Firestore'a ekle
       'animalType': _selectedType,
       'description': _descriptionController.text,
       'imageUrl': imageUrl,

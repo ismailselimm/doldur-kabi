@@ -25,24 +25,68 @@ class _ChatScreenState extends State<ChatScreen> {
   bool isBlocked = false;
 
   @override
+  @override
   void initState() {
     super.initState();
-    _markMessagesAsRead();
+
     final user = _auth.currentUser;
     if (user == null) {
       print("❌ Hata: Kullanıcı giriş yapmamış!");
       Navigator.pop(context);
       return;
     }
-    currentUserEmail = user.email!;
 
+    if (widget.receiverEmail == user.email) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Kendinize mesaj gönderemezsiniz.")),
+        );
+        Navigator.pop(context);
+      });
+      return;
+    }
+
+    currentUserEmail = user.email!;
     List<String> userEmails = [currentUserEmail, widget.receiverEmail];
     userEmails.sort();
     chatId = userEmails.join("_");
 
+    _markMessagesAsRead();
     _getReceiverInfo();
     _checkIfBlocked();
   }
+
+  void _showCustomDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,  // Kullanıcı, dışarıya tıklayarak kapatamaz
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: const [
+              Icon(Icons.error_outline, color: Colors.red, size: 30),
+              SizedBox(width: 10),
+              Text("Hata!", style: TextStyle(fontSize: 18)),
+            ],
+          ),
+          content: Text(
+            "Kendinize mesaj gönderemezsiniz.",
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);  // Dialogu kapat
+              },
+              child: Text("Tamam", style: TextStyle(color: Colors.purple)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
 
   void _markMessagesAsRead() async {
     var receivedMessages = await _firestore
@@ -121,7 +165,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF9346A1),
+        backgroundColor: Colors.black87,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           PopupMenuButton<String>(

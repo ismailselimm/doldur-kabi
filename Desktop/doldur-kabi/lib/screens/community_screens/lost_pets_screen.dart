@@ -382,12 +382,21 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
                       : () async {
                     Navigator.pop(ctx);
 
+                    // Kullanıcı bilgilerini alalım
+                    final reportedUserId = postData['userId'];
+                    final reportedUserSnapshot = await FirebaseFirestore.instance.collection('users').doc(reportedUserId).get();
+                    final reportedUserData = reportedUserSnapshot.data();
+
                     await FirebaseFirestore.instance.collection('complaints').add({
                       'type': 'Kayıp',
                       'contentId': postData['id'] ?? '',
                       'reportedBy': user.email,
                       'reason': selectedReason,
                       'timestamp': FieldValue.serverTimestamp(),
+                      'reportedUser': {
+                        'id': reportedUserId,
+                        'email': reportedUserData?['email'] ?? 'Bilinmiyor',
+                      }
                     });
 
                     await Future.delayed(const Duration(milliseconds: 100));
@@ -398,12 +407,7 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
                       barrierDismissible: true,
                       barrierLabel: "Teşekkürler",
                       transitionDuration: const Duration(milliseconds: 300),
-                      pageBuilder: (context, anim1, anim2) {
-                        return const Material(
-                          type: MaterialType.transparency,
-                          child: SizedBox.expand(),
-                        );
-                      },
+                      pageBuilder: (context, anim1, anim2) => const Material(type: MaterialType.transparency, child: SizedBox.expand()),
                       transitionBuilder: (context, anim1, anim2, child) {
                         final curvedValue = Curves.easeOutBack.transform(anim1.value);
                         return Opacity(
@@ -417,13 +421,6 @@ class _LostPetsScreenState extends State<LostPetsScreen> {
                                 decoration: BoxDecoration(
                                   color: Colors.green.withOpacity(0.85),
                                   borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.25),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                  ],
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
