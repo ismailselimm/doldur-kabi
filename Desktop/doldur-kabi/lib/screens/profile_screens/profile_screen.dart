@@ -5,6 +5,7 @@ import 'package:doldur_kabi/screens/profile_screens/invite_friends_page.dart';
 import 'package:doldur_kabi/screens/login_screens/login_screen.dart';
 import 'package:doldur_kabi/screens/profile_screens/privacy_notice_page.dart';
 import 'package:doldur_kabi/screens/profile_screens/privacy_policy_page.dart';
+import 'package:doldur_kabi/screens/profile_screens/supporters_screen.dart';
 import 'package:doldur_kabi/screens/profile_screens/terms_page.dart';
 import 'package:doldur_kabi/screens/profile_screens/true_information.dart';
 import 'package:doldur_kabi/screens/profile_screens/update_profile_page.dart';
@@ -67,34 +68,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     FirebaseFirestore firestore = FirebaseFirestore.instance;
 
     try {
-      print("🔥 Kullanıcı katkıları çekiliyor... UID: $userId");
+      // mama, besleme, ev sayıları
+      final userDoc = await firestore.collection('users').doc(userId).get();
+      final userData = userDoc.data() as Map<String, dynamic>;
 
-      // **🔥 Kullanıcı bilgilerini `users` koleksiyonundan al**
-      DocumentSnapshot userDoc = await firestore.collection('users').doc(userId).get();
-
-      if (!userDoc.exists) {
-        print("❌ Kullanıcı Firestore'da bulunamadı!");
-        return;
-      }
-
-      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+      // gönderi sayısını koleksiyonlardan hesapla
+      final posts = await firestore.collection('posts').where('userId', isEqualTo: userId).get();
+      final adoptions = await firestore.collection('adoption_posts').where('ownerId', isEqualTo: userId).get();
+      final lostPets = await firestore.collection('lost_pets').where('userId', isEqualTo: userId).get();
+      final totalGonderi = posts.size + adoptions.size + lostPets.size;
 
       setState(() {
+        mamaDoldurmaSayisi = userData['mamaDoldurmaSayisi'] ?? 0;
         beslemeNoktasiSayisi = userData['beslemeNoktasiSayisi'] ?? 0;
         hayvanEviSayisi = userData['hayvanEviSayisi'] ?? 0;
-        gonderiSayisi = userData['gonderiSayisi'] ?? 0;
-        mamaDoldurmaSayisi = userData['mamaDoldurmaSayisi'] ?? 0;
+        gonderiSayisi = totalGonderi; // 🔥 Doğru sayı burada!
       });
 
-      print("✅ Firestore verileri başarıyla çekildi!");
-      print("📌 Besleme Noktası: $beslemeNoktasiSayisi");
-      print("📌 Hayvan Evi: $hayvanEviSayisi");
-      print("📌 Gönderi: $gonderiSayisi");
-      print("📌 Mama Doldurma: $mamaDoldurmaSayisi");
     } catch (e) {
-      print("❌ Hata: Kullanıcı verileri çekilirken sorun oluştu: $e");
+      print("❌ Kullanıcı katkılarını çekerken hata oluştu: $e");
     }
   }
+
 
   Future<void> _fetchUpdatedUserData() async {
     if (user == null) return;
@@ -328,7 +323,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           _buildProfileStat("Hayvan Evi", "$hayvanEviSayisi", Colors.teal, FontAwesomeIcons.houseChimney),
-                          _buildProfileStat("Gönderi Paylaşma", "$gonderiSayisi", Colors.orange, FontAwesomeIcons.image),
+                          _buildProfileStat("Paylaşım Yapma", "$gonderiSayisi", Colors.orange, FontAwesomeIcons.image),
                         ],
                       ),
                     ],
@@ -385,65 +380,85 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               children: [
                 _buildOptionTile(
-                    icon: FontAwesomeIcons.solidMessage, // 🗨️ Mesajlar
-                    title: 'Mesajlarım',
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => MessagesScreen()));
-                    }),
+                  icon: FontAwesomeIcons.handshake, // 🤝 Destekçilerimiz
+                  title: 'Destekçilerimiz',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => SupportersScreen()),
+                    );
+                  },
+                ),
                 _buildOptionTile(
-                  icon: FontAwesomeIcons.bullhorn, // 📢 Duyurular
+                  icon: FontAwesomeIcons.envelope, // ✉️ Mesajlarım
+                  title: 'Mesajlarım',
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => MessagesScreen()));
+                  },
+                ),
+                _buildOptionTile(
+                  icon: FontAwesomeIcons.bullhorn, // 📢 Paylaşımlarım
                   title: 'Paylaşımlarım',
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => IlanlarimScreen()),);
-                    },),
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => IlanlarimScreen()));
+                  },
+                ),
                 _buildOptionTile(
-                    icon: FontAwesomeIcons.lightbulb, // 💡 Bilgilendirme
-                    title: 'Doğru Bilinen Yanlışlar',
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const MythsPage()));
-                    }),
+                  icon: FontAwesomeIcons.lightbulb, // 💡 Doğru Bilinen Yanlışlar
+                  title: 'Doğru Bilinen Yanlışlar',
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const MythsPage()));
+                  },
+                ),
                 _buildOptionTile(
-                    icon: FontAwesomeIcons.solidCircleQuestion, // ❓ Yardım
-                    title: 'Yardım',
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const HelpPage()));
-                    }),
+                  icon: FontAwesomeIcons.circleQuestion, // ❓ Yardım
+                  title: 'Yardım',
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const HelpPage()));
+                  },
+                ),
                 _buildOptionTile(
-                    icon: FontAwesomeIcons.phoneVolume, // 📞 İletişim
-                    title: 'Bize Ulaşın',
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ContactUsPage()));
-                    }),
+                  icon: FontAwesomeIcons.commentDots, // 📞 Bize Ulaşın
+                  title: 'Bize Ulaşın',
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const ContactUsPage()));
+                  },
+                ),
                 _buildOptionTile(
-                    icon: FontAwesomeIcons.userShield, // 🛡️ Gizlilik
-                    title: 'Gizlilik Politikası',
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyPolicyPage()));
-                    }),
+                  icon: FontAwesomeIcons.shieldHalved, // 🛡️ Gizlilik Politikası
+                  title: 'Gizlilik Politikası',
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyPolicyPage()));
+                  },
+                ),
                 _buildOptionTile(
-                    icon: FontAwesomeIcons.fileContract, // 📄 Şartlar
-                    title: 'Kullanım Şartları',
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const TermsAndConditionsPage()));
-                    }),
+                  icon: FontAwesomeIcons.fileLines, // 📄 Kullanım Şartları
+                  title: 'Kullanım Şartları',
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const TermsAndConditionsPage()));
+                  },
+                ),
                 _buildOptionTile(
-                    icon: FontAwesomeIcons.circleInfo, // ℹ️ Aydınlatma Metni
-                    title: 'Aydınlatma Metni',
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyNoticePage()));
-                    }),
+                  icon: FontAwesomeIcons.info, // ℹ️ Aydınlatma Metni
+                  title: 'Aydınlatma Metni',
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyNoticePage()));
+                  },
+                ),
                 _buildOptionTile(
-                    icon: FontAwesomeIcons.shareNodes, // 🔗 Paylaşım
-                    title: "DoldurKabı'yı Paylaş",
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const InviteFriendsPage()));
-                    }),
+                  icon: FontAwesomeIcons.shareFromSquare, // 🔗 Paylaş
+                  title: "DoldurKabı'yı Paylaş",
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const InviteFriendsPage()));
+                  },
+                ),
                 _buildOptionTile(
-                    icon: FontAwesomeIcons.arrowRightFromBracket, // 🚪 Çıkış
-                    title: 'Çıkış Yap',
-                    onTap: () {
-                      _showLogoutConfirmation();
-                    }),
+                  icon: FontAwesomeIcons.doorOpen, // 🚪 Çıkış
+                  title: 'Çıkış Yap',
+                  onTap: () {
+                    _showLogoutConfirmation();
+                  },
+                ),
                 const SizedBox(height: 10),
                 Center(
                   child: Text(
@@ -454,10 +469,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
+
         ],
       ),
     );
   }
+
 
   Widget _buildOptionTile({required IconData icon, required String title, required VoidCallback onTap}) {
     return Card(

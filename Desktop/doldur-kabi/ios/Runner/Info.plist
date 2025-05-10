@@ -20,15 +20,6 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.googleusercontent.apps.YOUR_CLIENT_ID</string>
-			</array>
-		</dict>
-	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>DoldurKabı</key>
@@ -81,5 +72,14 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.YOUR_CLIENT_ID</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

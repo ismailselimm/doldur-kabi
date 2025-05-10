@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:custom_info_window/custom_info_window.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -17,12 +16,13 @@ class VolunteerVetsMapScreen extends StatefulWidget {
 }
 
 class _VolunteerVetsMapScreenState extends State<VolunteerVetsMapScreen> {
-  final CustomInfoWindowController _customInfoWindowController = CustomInfoWindowController();
   GoogleMapController? _mapController;
   LatLng? _currentPosition;
   final Set<Marker> _markers = {};
   BitmapDescriptor? _vetIcon;
   BitmapDescriptor? _personIcon;
+  LatLng? _selectedVetPosition;
+  Map<String, dynamic>? _selectedVetData;
 
   @override
   void initState() {
@@ -30,10 +30,26 @@ class _VolunteerVetsMapScreenState extends State<VolunteerVetsMapScreen> {
     _initializeMap();
   }
 
+  LatLng offsetLatLng(LatLng original, int index) {
+    const double offsetDistance = 0.00006;
+    double dx = offsetDistance * (index % 3 - 1);
+    double dy = offsetDistance * ((index ~/ 3) - 1);
+    return LatLng(original.latitude + dy, original.longitude + dx);
+  }
+
   Future<void> _initializeMap() async {
     await _loadIcons();
     await _getCurrentLocation();
     await _loadVolunteerVets();
+  }
+
+  Future<void> openMapsWithQuery(String address) async {
+    final String query = Uri.encodeComponent(address);
+    final Uri mapsUrl = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+
+    if (!await launchUrl(mapsUrl, mode: LaunchMode.externalApplication)) {
+      throw '❌ Harita açılamadı: $mapsUrl';
+    }
   }
 
   Future<void> _loadIcons() async {
@@ -78,6 +94,8 @@ class _VolunteerVetsMapScreenState extends State<VolunteerVetsMapScreen> {
         .where('isVolunteer', isEqualTo: true)
         .get();
 
+    int index = 0;
+
     for (var doc in snapshot.docs) {
       final data = doc.data();
       LatLng? position;
@@ -96,72 +114,25 @@ class _VolunteerVetsMapScreenState extends State<VolunteerVetsMapScreen> {
       }
 
       if (position != null) {
+        LatLng adjustedPosition = offsetLatLng(position, index);
+        index++;
+
         _markers.add(
           Marker(
             markerId: MarkerId(doc.id),
-            position: position,
+            position: adjustedPosition,
             icon: _vetIcon!,
             onTap: () {
-              final LatLng pos = position!; // 👈 Null olamayacağına emin olduğumuz için
-              _customInfoWindowController.addInfoWindow!(
-                Container(
-                  constraints: const BoxConstraints(
-                    minWidth: 220,
-                    maxWidth: 280,
-                  ),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
-                  ),
-                  child: IntrinsicHeight( // ✨ Ekleme: yüksekliği içeriğe göre ayarla
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          data['businessName'] ?? 'Veteriner',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          data['address'] ?? 'Adres bulunamadı',
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                        const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: () async {
-                            final url = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=${pos.latitude},${pos.longitude}");
-                            if (await canLaunchUrl(url)) {
-                              await launchUrl(url, mode: LaunchMode.externalApplication);
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Navigasyon açılamadı")),
-                              );
-                            }
-                          },
-                          child: Row(
-                            children: const [
-                              Icon(Icons.navigation, color: Colors.purple, size: 18),
-                              SizedBox(width: 4),
-                              Text(
-                                "Yol Tarifi Al",
-                                style: TextStyle(
-                                  color: Colors.purple,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+              setState(() {
+                final LatLng pos = adjustedPosition; // 🔥 BURASI DEĞİŞTİ!
+                _selectedVetPosition = adjustedPosition;
+                _selectedVetData = data;
+              });
+
+              _mapController?.animateCamera(
+                CameraUpdate.newCameraPosition(
+                  CameraPosition(target: adjustedPosition, zoom: 17),
                 ),
-                pos,
               );
             },
           ),
@@ -170,47 +141,6 @@ class _VolunteerVetsMapScreenState extends State<VolunteerVetsMapScreen> {
     }
 
     setState(() {});
-  }
-
-  Widget _buildInfoWindow(Map<String, dynamic> data, LatLng position) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            data['businessName'] ?? 'Veteriner',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            data['address'] ?? '',
-            style: const TextStyle(fontSize: 14),
-            softWrap: true,
-            overflow: TextOverflow.visible,
-          ),
-          const SizedBox(height: 5),
-          Align(
-            alignment: Alignment.centerRight,
-            child: IconButton(
-              icon: const Icon(Icons.navigation, color: Colors.purple),
-              onPressed: () {
-                final url = Uri.parse(
-                  'https://www.google.com/maps/dir/?api=1&destination=${position.latitude},${position.longitude}',
-                );
-                _launchUrl(url);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _launchUrl(Uri url) async {
@@ -252,28 +182,92 @@ class _VolunteerVetsMapScreenState extends State<VolunteerVetsMapScreen> {
           ? const Center(child: CircularProgressIndicator())
           : GestureDetector(
         onTap: () {
-          _customInfoWindowController.hideInfoWindow!();
+          setState(() {
+            _selectedVetPosition = null;
+            _selectedVetData = null;
+          });
         },
         child: Stack(
           children: [
             GoogleMap(
               onMapCreated: (controller) {
                 _mapController = controller;
-                _customInfoWindowController.googleMapController = controller;
               },
               initialCameraPosition: CameraPosition(target: _currentPosition!, zoom: 13),
               markers: _markers,
               myLocationEnabled: false,
               myLocationButtonEnabled: false,
               zoomControlsEnabled: false,
-              onTap: (_) => _customInfoWindowController.hideInfoWindow!(),
+              onTap: (_) {
+                setState(() {
+                  _selectedVetPosition = null;
+                  _selectedVetData = null;
+                });
+              },
             ),
-            CustomInfoWindow(
-              controller: _customInfoWindowController,
-              height: 140,
-              width: 280,
-              offset: 35,
-            ),
+
+            // 🔥 VETERİNER BİLGİ KUTUSU
+            if (_selectedVetPosition != null && _selectedVetData != null)
+              Positioned(
+                left: MediaQuery.of(context).size.width / 2 - 140,
+                top: MediaQuery.of(context).size.height / 2 - 40,
+                child: Container(
+                  width: 280,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedVetData!['businessName'] ?? 'Veteriner',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _selectedVetData!['address'] ?? 'Adres bulunamadı',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: () {
+                          final address = _selectedVetData?['address'] ?? '';
+                          openMapsWithQuery(address);
+                        },
+
+
+
+
+                        child: Row(
+                          children: const [
+                            Icon(Icons.navigation, color: Colors.purple, size: 18),
+                            SizedBox(width: 4),
+                            Text(
+                              "Yol Tarifi Al",
+                              style: TextStyle(
+                                color: Colors.purple,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+
+
+
+
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // 🔍 ZOOM ve KONUM
             Positioned(
               bottom: 100,
               right: 10,

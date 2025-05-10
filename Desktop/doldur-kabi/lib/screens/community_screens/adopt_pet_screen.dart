@@ -7,6 +7,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:doldur_kabi/screens/community_screens/adoption_post_screen.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../login_screens/login_screen.dart';
 import '../profile_screens/chat_screen.dart';
 
 class AdoptionScreen extends StatefulWidget {
@@ -32,7 +33,7 @@ class _AdoptionScreenState extends State<AdoptionScreen> {
     if (_selectedCity == "Tümü") {
       return "Tüm şehirlerdeki ilanlar gösteriliyor";
     } else if (_selectedCity != null && _selectedCity!.isNotEmpty) {
-      return "$_selectedCity şehrindeki ilanlar gösteriliyor";
+      return "$_selectedCity şehrindeki ilanlar ";
     } else {
       return "Şehir bilgisi bulunamadı";
     }
@@ -42,6 +43,67 @@ class _AdoptionScreenState extends State<AdoptionScreen> {
 
 
   @override
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(Duration.zero, () {
+      _checkUserLoginStatus();
+    });
+  }
+
+  void _checkUserLoginStatus() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showLoginAlert();
+    }
+  }
+
+  void _showLoginAlert() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text(
+            "Sahiplendirme Özellikleri",
+            style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.purple[700]),
+            textAlign: TextAlign.center,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Hayvan sahiplendirme ilanlarını görüntüleyebilmek ve bu özellikleri kullanabilmek için giriş yapmanız gerekmektedir.",
+                style: GoogleFonts.poppins(fontSize: 16, color: Colors.black87, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => LoginScreen()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                ),
+                child: const Text("Giriş Yap", style: TextStyle(fontSize: 18)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -132,10 +194,10 @@ class _AdoptionScreenState extends State<AdoptionScreen> {
                 padding: const EdgeInsets.all(10.0),
                 child: Row(
                   children: [
-                    Icon(FontAwesomeIcons.mapMarkerAlt, color: Colors.purple), // Şehir ikonu eklendi
+                    Icon(FontAwesomeIcons.mapMarkerAlt, color: Colors.purple),
                     SizedBox(width: 8),
                     Text(
-                      "$_selectedCity şehrindeki ilanlar gösteriliyor",
+                      getCityText(),
                       style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.purple),
                     ),
                   ],
@@ -436,30 +498,35 @@ class _AdoptionScreenState extends State<AdoptionScreen> {
             ),
             const SizedBox(height: 10),
 
-            // 📩 Mesaj Gönder Butonu
-            Align(
-              alignment: Alignment.center,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  _openChatWithOwner(adopt['ownerEmail']);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9346A1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(FontAwesomeIcons.facebookMessenger, color: Colors.white),
-                label: const Text('Mesaj Gönder', style: TextStyle(color: Colors.white)),
-              ),
-            ),
+            const SizedBox(height: 10),
 
-            Align(
-              alignment: Alignment.center,
-              child: TextButton.icon(
-                onPressed: () => _showReportDialog(context, adopt),
-                icon: Icon(Icons.flag, color: Colors.redAccent),
-                label: Text("Bu ilanı bildir", style: GoogleFonts.poppins(color: Colors.redAccent)),
-              ),
+// 🔘 Butonları yan yana hizala
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // 📩 Mesaj Gönder Butonu
+                ElevatedButton.icon(
+                  onPressed: () {
+                    _openChatWithOwner(adopt['ownerEmail']);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9346A1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  icon: const Icon(FontAwesomeIcons.facebookMessenger, color: Colors.white, size: 18),
+                  label: const Text('Mesaj Gönder', style: TextStyle(color: Colors.white, fontSize: 13)),
+                ),
+
+                // 🚩 Bildir Butonu
+                TextButton.icon(
+                  onPressed: () => _showReportDialog(context, adopt),
+                  icon: const Icon(Icons.flag, color: Colors.redAccent, size: 20),
+                  label: Text("İlanı Bildir", style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                ),
+              ],
             ),
+            const SizedBox(height: 10),
           ],
         ),
       ),

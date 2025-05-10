@@ -311,7 +311,7 @@ class _UpdateProfilePageState extends State<UpdateProfilePage> {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.purple.shade700,
+                        color: Colors.black,
                         border: Border.all(color: Colors.white, width: 2),
                       ),
                       child: const Icon(
@@ -328,7 +328,10 @@ class _UpdateProfilePageState extends State<UpdateProfilePage> {
             const SizedBox(height: 10),
             TextButton(
               onPressed: _deleteProfilePicture,
-              child: const Text("Profil Resmini Kaldır"),
+              child: const Text(
+                "Profil Resmini Kaldır",
+                style: TextStyle(color: Colors.black),
+              ),
             ),
             const SizedBox(height: 25),
             _buildTextField(_firstNameController, 'Ad'),

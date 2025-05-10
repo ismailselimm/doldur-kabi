@@ -198,7 +198,8 @@ class _AddFeedingPointScreenState extends State<AddFeedingPointScreen> {
           color: Colors.white,
         ),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -220,7 +221,7 @@ class _AddFeedingPointScreenState extends State<AddFeedingPointScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Text(
-                    "Adres: $_currentAddress",
+                    "📍Adres : $_currentAddress",
                     style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey[800]),
                   ),
                 ),
@@ -229,11 +230,11 @@ class _AddFeedingPointScreenState extends State<AddFeedingPointScreen> {
             Container(
               height: 300,
               decoration: BoxDecoration(
-                border: Border.all(color: Color(0xFF9346A1), width: 3), // Mor çerçeve ekledik
-                borderRadius: BorderRadius.circular(12), // Köşeleri yumuşattık
+                border: Border.all(color: Color(0xFF9346A1), width: 3),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12), // Haritayı da köşelerden yuvarladık
+                borderRadius: BorderRadius.circular(12),
                 child: GoogleMap(
                   initialCameraPosition: _selectedLocation != null
                       ? CameraPosition(target: _selectedLocation!, zoom: 17)
@@ -253,17 +254,14 @@ class _AddFeedingPointScreenState extends State<AddFeedingPointScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              "Ekleyeceğiniz konumu harita üzerinden kaydırarak veya sağ altta bulunan konum işaretine basarak seçiniz.",
+              "Ekleyeceğiniz konumu harita üzerinden kaydırarak veya sağ altta bulunan konum işaretine basarak seçiniz."
+                  " Kabı ekledikten sonra anasayfadan doldurmayı unutmayınız! 😇",
               style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[700]),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             ElevatedButton(
-              onPressed: _selectedLocation == null
-                  ? null
-                  : () {
-                _saveFeedingPoint();
-              },
+              onPressed: _selectedLocation == null ? null : _saveFeedingPoint,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF23B14D),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -278,6 +276,7 @@ class _AddFeedingPointScreenState extends State<AddFeedingPointScreen> {
           ],
         ),
       ),
+
       backgroundColor: const Color(0xFFF8F8F8),
     );
   }

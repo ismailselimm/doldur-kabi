@@ -1,3 +1,4 @@
+import 'package:doldur_kabi/screens/community_screens/adopt_pet_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,6 +8,9 @@ import 'screens/profile_screens/profile_screen.dart';
 import 'screens/login_screens/login_screen.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
+import 'screens/community_screens/adopt_pet_screen.dart';
+import 'screens/community_screens/lost_pets_screen.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,9 +76,12 @@ class _HomePageState extends State<HomePage> {
 
   final List<Widget> _screens = [
     HomeScreen(),
+    AdoptionScreen(),     // Yeni sahiplendirme ekranı
     CommunityScreen(),
+    LostPetsScreen(),         // Yeni kayıp ekranı
     ProfileScreen(),
   ];
+
 
   @override
   void initState() {
@@ -91,17 +98,26 @@ class _HomePageState extends State<HomePage> {
         onTap: _onItemTapped,
         showSelectedLabels: false,
         showUnselectedLabels: false,
+        type: BottomNavigationBarType.fixed, // ✅ 5 item için şart
         items: <BottomNavigationBarItem>[
           BottomNavigationBarItem(
-            icon: Image.asset('assets/images/zoology.png', width: SelectedIndex.index == 0 ? 30 : 25),
+            icon: Image.asset('assets/images/zoology.png', width: SelectedIndex.index == 0 ? 27 : 21),
             label: '',
           ),
           BottomNavigationBarItem(
-            icon: Image.asset('assets/images/comment.png', width: SelectedIndex.index == 1 ? 30 : 25),
+            icon: Image.asset('assets/images/hand.png', width: SelectedIndex.index == 1 ? 30 : 25), // Sahiplendirme
             label: '',
           ),
           BottomNavigationBarItem(
-            icon: Image.asset('assets/images/user2.png', width: SelectedIndex.index == 2 ? 30 : 25),
+            icon: Image.asset('assets/images/people.png', width: SelectedIndex.index == 2 ? 35 : 30),
+            label: '',
+          ),
+          BottomNavigationBarItem(
+            icon: Image.asset('assets/images/danger.png', width: SelectedIndex.index == 3 ? 26 : 21), // Kayıp
+            label: '',
+          ),
+          BottomNavigationBarItem(
+            icon: Image.asset('assets/images/user2.png', width: SelectedIndex.index == 4 ? 30 : 22),
             label: '',
           ),
         ],

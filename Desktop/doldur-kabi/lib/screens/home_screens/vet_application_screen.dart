@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
-
+import 'package:geocoding/geocoding.dart';
 
 class VetApplicationScreen extends StatefulWidget {
   @override
@@ -15,7 +15,7 @@ class _VetApplicationScreenState extends State<VetApplicationScreen> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   bool _isVolunteer = false;
-  bool _isSubmitting = false; // 🔥 Başvuru sırasında butonu kapatmak için
+  bool _isSubmitting = false;
 
   Future<void> _submitApplication() async {
     if (!_formKey.currentState!.validate()) return;
@@ -25,6 +25,11 @@ class _VetApplicationScreenState extends State<VetApplicationScreen> {
     });
 
     try {
+      // 📍 Adresten koordinat üret
+      List<Location> locations = await locationFromAddress(_addressController.text);
+      double latitude = locations.first.latitude;
+      double longitude = locations.first.longitude;
+
       await FirebaseFirestore.instance.collection('vetApplications').add({
         'businessName': _nameController.text,
         'address': _addressController.text,
@@ -32,9 +37,10 @@ class _VetApplicationScreenState extends State<VetApplicationScreen> {
         'isVolunteer': _isVolunteer,
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
+        'latitude': latitude,
+        'longitude': longitude,
       });
 
-      // 🎉 Modern AlertDialog
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -50,8 +56,8 @@ class _VetApplicationScreenState extends State<VetApplicationScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(ctx); // Dialog kapansın
-                Navigator.pop(context); // Sayfadan çıkılsın
+                Navigator.pop(ctx);
+                Navigator.pop(context);
               },
               child: const Text("Tamam"),
             )
@@ -59,9 +65,9 @@ class _VetApplicationScreenState extends State<VetApplicationScreen> {
         ),
       );
     } catch (e) {
-      print("❌ Firebase Hatası: $e");
+      print("❌ Hata: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Başvuru sırasında hata oluştu, tekrar deneyin.")),
+        const SnackBar(content: Text("Konum alınırken hata oluştu, adresi kontrol edin.")),
       );
     }
 
@@ -84,9 +90,7 @@ class _VetApplicationScreenState extends State<VetApplicationScreen> {
         ),
         backgroundColor: const Color(0xFF9346A1),
         centerTitle: true,
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -100,7 +104,7 @@ class _VetApplicationScreenState extends State<VetApplicationScreen> {
                   width: MediaQuery.of(context).size.width * 0.9,
                   child: DefaultTextStyle(
                     style: GoogleFonts.poppins(
-                      fontSize:18,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.deepPurple,
                     ),
@@ -138,14 +142,14 @@ class _VetApplicationScreenState extends State<VetApplicationScreen> {
               const SizedBox(height: 20),
               Center(
                 child: ElevatedButton(
-                  onPressed: _isVolunteer && !_isSubmitting ? _submitApplication : null, // 🔥 Sadece gönüllü seçildiyse aktif
+                  onPressed: _isVolunteer && !_isSubmitting ? _submitApplication : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _isVolunteer ? Colors.purple[700] : Colors.grey, // 🔥 Gönüllü değilse gri
+                    backgroundColor: _isVolunteer ? Colors.purple[700] : Colors.grey,
                     padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   child: _isSubmitting
-                      ? const CircularProgressIndicator(color: Colors.white) // 🔥 Yüklenme göstergesi
+                      ? const CircularProgressIndicator(color: Colors.white)
                       : const Text("Başvuruyu Gönder", style: TextStyle(fontSize: 18, color: Colors.white)),
                 ),
               ),

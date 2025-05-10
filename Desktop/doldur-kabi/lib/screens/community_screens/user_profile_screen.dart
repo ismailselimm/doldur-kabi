@@ -11,6 +11,7 @@ class UserProfileScreen extends StatefulWidget {
   final String userId;
   final String userEmail;
 
+
   const UserProfileScreen({super.key, required this.userId, required this.userEmail});
 
   @override
@@ -19,150 +20,215 @@ class UserProfileScreen extends StatefulWidget {
 
 class _UserProfileScreenState extends State<UserProfileScreen> with TickerProviderStateMixin {
   late TabController _tabController;
+  int totalUserPosts = 0;
+
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _fetchTotalUserPosts(); // 👈 bunu ekle
   }
 
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F2F9),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.black87,
+        backgroundColor: Colors.deepPurple,
         title: Text("DoldurKabı Profili",
             style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final data = snapshot.data!.data() as Map<String, dynamic>;
+      body: Stack(
+        children: [
+          // 🔹 Ana içerik aynı kalsın
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              final data = snapshot.data!.data() as Map<String, dynamic>;
 
-          int mamaDoldurma = data['mamaDoldurmaSayisi'] ?? 0;
-          int beslemeKabi = data['beslemeNoktasiSayisi'] ?? 0;
-          int hayvanEvi = data['hayvanEviSayisi'] ?? 0;
-          int gonderiSayisi = data['gonderiSayisi'] ?? 0;
+              int mamaDoldurma = data['mamaDoldurmaSayisi'] ?? 0;
+              int beslemeKabi = data['beslemeNoktasiSayisi'] ?? 0;
+              int hayvanEvi = data['hayvanEviSayisi'] ?? 0;
+              int totalUserPosts = this.totalUserPosts;
 
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        if (data['profileUrl'] != null && data['profileUrl'].toString().isNotEmpty) {
-                          Navigator.push(
-                            context,
-                            PageRouteBuilder(
-                              opaque: false,
-                              pageBuilder: (_, __, ___) => FullScreenImage(imageUrl: data['profileUrl']),
-                            ),
-                          );
-                        }
-                      },
-                      child: Hero(
-                        tag: 'profileImage_${data['uid'] ?? widget.userId}',
-                        child: CircleAvatar(
-                          radius: 40,
-                          backgroundColor: Colors.grey[300],
-                          child: ClipOval(
-                            child: Image.network(
-                              data['profileUrl'],
-                              width: 80,
-                              height: 80,
-                              fit: BoxFit.cover,
-                              loadingBuilder: (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return const CircularProgressIndicator();
-                              },
-                              errorBuilder: (context, error, stackTrace) {
-                                return Image.asset('assets/images/avatar1.png');
-                              },
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            if (data['profileUrl'] != null && data['profileUrl'].toString().isNotEmpty) {
+                              Navigator.push(
+                                context,
+                                PageRouteBuilder(
+                                  opaque: false,
+                                  pageBuilder: (_, __, ___) => FullScreenImage(imageUrl: data['profileUrl']),
+                                ),
+                              );
+                            }
+                          },
+                          child: Hero(
+                            tag: 'profileImage_${data['uid'] ?? widget.userId}',
+                            child: CircleAvatar(
+                              radius: 50,
+                              backgroundColor: Colors.grey[300],
+                              backgroundImage: NetworkImage(data['profileUrl'] ?? ''),
                             ),
                           ),
                         ),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("${data['firstName']} ${data['lastName']}",
+                                  style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text(data['email'] ?? '',
+                                  style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey[600])),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                children: [
+                                  _buildStatItem(FontAwesomeIcons.bowlFood, mamaDoldurma, Colors.black87),
+                                  const SizedBox(width: 20),
+                                  _buildStatItem(FontAwesomeIcons.paw, beslemeKabi, Colors.black87),
+                                  const SizedBox(width: 20),
+                                  _buildStatItem(FontAwesomeIcons.houseChimney, hayvanEvi, Colors.black87),
+                                  const SizedBox(width: 20),
+                                  _buildStatItem(FontAwesomeIcons.image, totalUserPosts, Colors.black87),
+                                ],
+                              ),
+                            ],
+                          ),
+                        )
+                      ],
+                    ),
+                  ),
+
+                  Align(
+                    alignment: Alignment.center,
+                    child: TabBar(
+                      controller: _tabController,
+                      indicatorColor: const Color(0xFF9346A1),
+                      labelColor: Colors.black,
+                      unselectedLabelColor: Colors.grey,
+                      tabs: const [
+                        Tab(icon: FaIcon(FontAwesomeIcons.image)),
+                        Tab(icon: FaIcon(FontAwesomeIcons.paw)),
+                        Tab(icon: FaIcon(FontAwesomeIcons.exclamationTriangle)),
+                      ],
+                    ),
+                  ),
+
+                  const Divider(height: 0),
+
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildUserContentList("posts", widget.userId, "description", "imageUrl"),
+                        _buildUserContentList("adoption_posts", widget.userId, "description", "imageUrl", idField: "ownerId"),
+                        _buildUserContentList("lost_pets", widget.userId, "petName", "imageUrl"),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          // 🔴 Sağ alt köşeye sabit "Mesaj Gönder" butonu
+          Positioned(
+            bottom: 40,
+            right: 20,
+            child: InkWell(
+              onTap: () {
+                final email = widget.userEmail;
+                if (email.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => ChatScreen(receiverEmail: email)),
+                  );
+                }
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Ink(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF7B2CBF), Color(0xFF9D4EDD)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 6,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(FontAwesomeIcons.paperPlane, size: 16, color: Colors.white),
+                    SizedBox(width: 10),
+                    Text(
+                      "İletişime Geç",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("${data['firstName']} ${data['lastName']}",
-                              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),
-                          Text(data['email'],
-                              style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[600])),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(FontAwesomeIcons.paperPlane, color: Colors.black),
-                      onPressed: () {
-                        final email = data['email'] ?? '';
-                        if (email.isNotEmpty) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => ChatScreen(receiverEmail: email)),
-                          );
-                        }
-                      },
-                    ),
                   ],
                 ),
               ),
-              _buildMiniStatsRow(
-                mamaDoldurma,
-                beslemeKabi,
-                hayvanEvi,
-                gonderiSayisi,
-              ),
-
-              const SizedBox(height: 16),
-
-              /// 🔥 ARTIK BURADA: TABBAR
-              Align(
-                alignment: Alignment.center,
-                child: TabBar(
-                  controller: _tabController,
-                  indicatorColor: const Color(0xFF9346A1),
-                  labelColor: Colors.black,
-                  unselectedLabelColor: Colors.grey,
-                  tabs: const [
-                    Tab(icon: FaIcon(FontAwesomeIcons.image)),          // Gönderiler
-                    Tab(icon: FaIcon(FontAwesomeIcons.paw)),            // Sahiplendirme
-                    Tab(icon: FaIcon(FontAwesomeIcons.exclamationTriangle)), // Kayıp
-                  ],
-                ),
-              ),
-
-              const Divider(height: 0),
-
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildUserContentList("posts", widget.userId, "description", "imageUrl"),
-                    _buildUserContentList("adoption_posts", widget.userId, "description", "imageUrl", idField: "ownerId"),
-                    _buildUserContentList("lost_pets", widget.userId, "petName", "imageUrl"),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
+
   }
 
 
+  void _fetchTotalUserPosts() async {
+    int total = 0;
+    final userId = widget.userId;
+
+    final posts = await FirebaseFirestore.instance
+        .collection('posts')
+        .where('userId', isEqualTo: userId)
+        .get();
+    total += posts.size;
+
+    final adoptions = await FirebaseFirestore.instance
+        .collection('adoption_posts')
+        .where('ownerId', isEqualTo: userId)
+        .get();
+    total += adoptions.size;
+
+    final losts = await FirebaseFirestore.instance
+        .collection('lost_pets')
+        .where('userId', isEqualTo: userId)
+        .get();
+    total += losts.size;
+
+    if (mounted) {
+      setState(() {
+        totalUserPosts = total;
+      });
+    }
+  }
 
 
   Widget _buildUserContentList(String collection, String userId, String contentField, String imageField,
@@ -224,25 +290,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
     );
   }
 
-  Widget _buildMiniStatsRow(int mama, int kabi, int ev, int gonderi) {
+  Widget _buildMiniStatsRow(int mama, int kabi, int ev, int totalUserPosts,) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 70, vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Sol başlık
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(" DoldurKabı", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)),
-              Text("   Analizleri", style: GoogleFonts.poppins(fontSize: 16)),
-            ],
-          ),
-          const SizedBox(width: 8),
-
-          // Aradaki ":"
-          const Text(":", style: TextStyle(fontSize: 18)),
-
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -250,7 +303,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
                 _buildStatItem(FontAwesomeIcons.bowlFood, mama, Colors.black87),
                 _buildStatItem(FontAwesomeIcons.paw, kabi, Colors.black87),
                 _buildStatItem(FontAwesomeIcons.houseChimney, ev, Colors.black87),
-                _buildStatItem(FontAwesomeIcons.image, gonderi, Colors.black87),
+                _buildStatItem(FontAwesomeIcons.image, totalUserPosts, Colors.black87),
               ],
             ),
           ),
@@ -268,7 +321,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
         Text(
           "$count",
           style: GoogleFonts.poppins(
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: FontWeight.w600,
             color: color,
           ),
@@ -333,13 +386,18 @@ void _showAdoptionDetail(BuildContext context, Map<String, dynamic> data) {
 
 // 🔥 Kayıp ilanı için grid item
 Widget buildLostPetGridItem(BuildContext context, Map<String, dynamic> data) {
+  List<dynamic> imageUrls = data['imageUrls'] ?? [];
+  String imageUrl = imageUrls.isNotEmpty ? imageUrls[0] : "";
+
   return GestureDetector(
     onTap: () => _showLostPetDetail(context, data),
     child: ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        data['imageUrl'],
-        fit: BoxFit.cover,
+      child: imageUrl.isNotEmpty
+          ? Image.network(imageUrl, fit: BoxFit.cover)
+          : Container(
+        color: Colors.grey[300],
+        child: const Center(child: Icon(Icons.image, size: 40)),
       ),
     ),
   );
@@ -348,36 +406,87 @@ Widget buildLostPetGridItem(BuildContext context, Map<String, dynamic> data) {
 
 // 🔥 Kayıp detay sayfası
 void _showLostPetDetail(BuildContext context, Map<String, dynamic> data) {
+  List<dynamic> imageUrls = data['imageUrls'] ?? [];
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.black,
-    builder: (_) => Container(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    builder: (_) => StatefulBuilder(
+      builder: (context, setState) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(backgroundColor: Colors.redAccent, child: const Icon(Icons.report, color: Colors.white)),
-              const SizedBox(width: 10),
-              Text(data['petName'] ?? "Kayıp Hayvan", style: GoogleFonts.poppins(color: Colors.white, fontSize: 16)),
-              ],
+              Row(
+                children: [
+                  const CircleAvatar(
+                    backgroundColor: Colors.redAccent,
+                    child: Icon(Icons.report, color: Colors.white),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(data['petName'] ?? "Kayıp Hayvan",
+                      style: GoogleFonts.poppins(color: Colors.white, fontSize: 16)),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // 🔥 Çoklu fotoğraf carousel
+              SizedBox(
+                height: 200,
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: imageUrls.length,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentPage = index;
+                    });
+                  },
+                  itemBuilder: (context, index) {
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(imageUrls[index], fit: BoxFit.cover),
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // 🔘 Nokta göstergesi
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(imageUrls.length, (index) {
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentPage == index ? 12 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _currentPage == index ? Colors.deepPurple : Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  );
+                }),
+              ),
+
+              const SizedBox(height: 12),
+              Text("Tür: ${data['petType'] ?? "-"}",
+                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 14)),
+              Text("Konum: ${data['location'] ?? "-"}",
+                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 14)),
+              const SizedBox(height: 8),
+              Text("İletişim: ${data['phone'] ?? "-"}",
+                  style: GoogleFonts.poppins(color: Colors.grey[300], fontSize: 13)),
+              const SizedBox(height: 12),
+            ],
           ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.network(data['imageUrl'], fit: BoxFit.cover),
-          ),
-          const SizedBox(height: 12),
-          Text("Tür: ${data['petType'] ?? "-"}", style: GoogleFonts.poppins(color: Colors.white, fontSize: 14)),
-          Text("Konum: ${data['location'] ?? "-"}", style: GoogleFonts.poppins(color: Colors.white, fontSize: 14)),
-          const SizedBox(height: 8),
-          Text("İletişim: ${data['phone'] ?? "-"}", style: GoogleFonts.poppins(color: Colors.grey[300], fontSize: 13)),
-          const SizedBox(height: 12),
-        ],
-      ),
+        );
+      },
     ),
   );
 }

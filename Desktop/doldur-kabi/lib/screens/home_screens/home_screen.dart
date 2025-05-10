@@ -1,9 +1,13 @@
+import 'dart:ui';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:doldur_kabi/screens/home_screens/shelter_list_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:doldur_kabi/screens/home_screens/nearby_vets_screen.dart';
 import 'package:doldur_kabi/screens/home_screens/add_feeding_point_screen.dart';
 import 'package:doldur_kabi/screens/home_screens/add_cathouse_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,6 +15,10 @@ import 'package:doldur_kabi/screens/home_screens/notification_screen.dart';
 import 'package:flutter/services.dart';
 import '../../functions/get_resized_marker.dart';
 import 'package:custom_info_window/custom_info_window.dart';
+import 'emergency_report_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -36,6 +44,18 @@ class _HomeScreenState extends State<HomeScreen> {
   BitmapDescriptor? _dogAnimalHouseIcon;
   String? _selectedFilter; // "cat" veya "dog" olacak, null ise hepsi gösterilecek
   String? _selectedAnimalType; // Seçilen mama kabının türü (Kedi / Köpek)
+  Map<String, bool> _fillingStates = {};      // her noktanın doldurma animasyonu
+  Map<String, bool> _fillCompletedStates = {}; // her noktanın doldurma tamam bilgisi
+  String? _lastFilledImageUrl;
+
+
+  LatLng offsetLatLng(LatLng original, int index) {
+    const double offsetDistance = 0.00006; // 🔥 Bu değeri büyüttüm
+    double dx = offsetDistance * (index % 3 - 1); // -1, 0, 1
+    double dy = offsetDistance * ((index ~/ 3) - 1); // -1, 0, 1
+
+    return LatLng(original.latitude + dy, original.longitude + dx);
+  }
 
 
 
@@ -64,38 +84,41 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // **1️⃣ Besleme noktalarını çek**
       QuerySnapshot feedPointsSnapshot = await _firestore.collection('feedPoints').get();
+      int feedIndex = 0; // ✅ Index sayacı
+
       for (var doc in feedPointsSnapshot.docs) {
         var data = doc.data() as Map<String, dynamic>;
+        if (!data.containsKey('latitude') || !data.containsKey('longitude')) continue;
 
-        if (!data.containsKey('latitude') || !data.containsKey('longitude')) {
-          print("⚠️ HATA: Eksik veri var! ${doc.id}");
-          continue; // Eğer lokasyon eksikse ekleme!
-        }
+        if (_selectedFilter != null && data['animal'] != _selectedFilter) continue;
 
-        // 🔥 Eğer filtreleme aktifse ve bu nokta uymuyorsa, eklemiyoruz
-        if (_selectedFilter != null && data['animal'] != _selectedFilter) {
-          continue;
-        }
+        LatLng originalPosition = LatLng(data['latitude'], data['longitude']);
+        LatLng adjustedPosition = offsetLatLng(originalPosition, feedIndex); // ✅ Offset uygula
+        feedIndex++;
 
         newMarkers.add(
           Marker(
             markerId: MarkerId(doc.id),
-            position: LatLng(data['latitude'], data['longitude']),
+            position: adjustedPosition,
             icon: data['animal'] == 'cat' ? _catFeedingPointIcon! : _dogFeedingPointIcon!,
             onTap: () {
-              print("📌 INFO: ${doc.id} noktasına basıldı, lastFilled: ${data.containsKey('lastFilled') ? data['lastFilled'] : 'Yok'}");
-
               setState(() {
                 _selectedPoint = doc.id;
+                _fillingStates.putIfAbsent(doc.id, () => false);
                 _selectedLastFilled = data.containsKey('lastFilled') ? data['lastFilled'] : null;
-                _selectedPosition = LatLng(data['latitude'], data['longitude']);
-                _selectedIsAnimalHouse = false; // Besleme noktası olduğu için false
+                _lastFilledImageUrl = data['lastFilledImageUrl'];
+                _selectedPosition = adjustedPosition;
+                _selectedIsAnimalHouse = false;
+                _selectedAnimalType = (data['animal'] == 'cat') ? 'Kedi' : 'Köpek';
 
-                // 🔥 Burada hayvan türünü ekliyoruz!
-                _selectedAnimalType = (data.containsKey('animal') && data['animal'] != null)
-                    ? (data['animal'] == 'cat' ? 'Kedi' : 'Köpek')
-                    : 'Bilinmiyor'; // Eğer animal alanı yoksa, varsayılan olarak bilinmiyor gösterme!
+                if (data.containsKey('lastFilled')) {
+                  _fillCompletedStates[doc.id] = true;
+                } else {
+                  _fillCompletedStates[doc.id] = false;
+                }
               });
+
+
 
               _customInfoWindowController.addInfoWindow!(
                 Container(
@@ -104,79 +127,121 @@ class _HomeScreenState extends State<HomeScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      const BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 2),
-                    ],
+                    boxShadow: [const BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 2)],
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        "📍 Mama Kabı (${_selectedAnimalType})", // 🔥 Artık "Bilinmiyor" yerine kedi veya köpek yazacak
+                        "📍 Mama Kabı (${_selectedAnimalType})",
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
                 ),
-                LatLng(data['latitude'], data['longitude']),
+                adjustedPosition,
               );
             },
-
           ),
         );
       }
 
       // **2️⃣ Hayvan evlerini çek**
       QuerySnapshot animalHousesSnapshot = await firestore.collection('animalHouses').get();
+      int houseIndex = 0;
+
       for (var doc in animalHousesSnapshot.docs) {
         var data = doc.data() as Map<String, dynamic>;
+        if (!data.containsKey('latitude') || !data.containsKey('longitude')) continue;
 
-        if (!data.containsKey('latitude') || !data.containsKey('longitude')) {
-          print("⚠️ HATA: Eksik veri var! ${doc.id}");
-          continue; // Eğer lokasyon eksikse ekleme!
-        }
+        LatLng originalPosition = LatLng(data['latitude'], data['longitude']);
+        LatLng adjustedPosition = offsetLatLng(originalPosition, houseIndex); // ✅ Offset uygula
+        houseIndex++;
 
         newMarkers.add(
           Marker(
             markerId: MarkerId(doc.id),
-            position: LatLng(data['latitude'], data['longitude']),
+            position: adjustedPosition,
             icon: data['animal'] == 'cat' ? _catAnimalHouseIcon! : _dogAnimalHouseIcon!,
             onTap: () {
-              print("📌 INFO: ${doc.id} Hayvan Evi noktasına basıldı");
+              if (_selectedPoint != doc.id) {
+                setState(() {
+                  _fillingStates.clear();
+                  _fillCompletedStates.clear();
+                });
+              }
 
               setState(() {
                 _selectedPoint = doc.id;
-                _selectedPosition = LatLng(data['latitude'], data['longitude']);
+                _selectedLastFilled = data.containsKey('lastFilled') ? data['lastFilled'] : data['date'];
+                _selectedPosition = adjustedPosition;
                 _selectedIsAnimalHouse = true;
+                _selectedAnimalType = (data['animal'] == 'cat') ? 'Kedi' : 'Köpek';
+
+                _lastFilledImageUrl = data['imageUrl'];
+
+
+                // Harita kutucuğu için ilk durum ataması
+                _fillingStates.putIfAbsent(doc.id, () => false);
+                _fillCompletedStates.putIfAbsent(doc.id, () => false);
               });
 
               _customInfoWindowController.addInfoWindow!(
                 Container(
-                  width: 260,
+                  width: 240,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      const BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 2),
-                    ],
+                    boxShadow: [const BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 2)],
                   ),
-                  child: const Column(
+                  child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
+                      const Text(
                         "🏠 Burası Hayvan Evi",
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
+                      const SizedBox(height: 8),
+                      if (data.containsKey('imageUrl') && data['imageUrl'] is String && data['imageUrl'].toString().isNotEmpty)
+                        FutureBuilder(
+                          future: precacheImage(NetworkImage(data['imageUrl']), context),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.done) {
+                              return GestureDetector(
+                                onTap: () => _showImagePopup(context, data['imageUrl']),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(
+                                    data['imageUrl'],
+                                    width: 180,
+                                    height: 100,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              );
+                            } else {
+                              return const SizedBox(
+                                width: 180,
+                                height: 100,
+                                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                              );
+                            }
+                          },
+                        ),
                     ],
                   ),
                 ),
-                LatLng(data['latitude'], data['longitude']),
+                adjustedPosition,
               );
+
+
+
             },
           ),
         );
       }
+
 
       // **🔥 Marker'ları Güncelle**
       setState(() {
@@ -205,63 +270,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     print("✅ Tüm eksik animal alanları tamamlandı!");
-  }
-
-
-
-  void _addFirestoreMarker(LatLng position, String title, BitmapDescriptor icon, String pointID, Map<String, dynamic> data, [Timestamp? lastFilled]) {
-    setState(() {
-      _markers.removeWhere((marker) => marker.markerId.value == pointID);
-      _markers.add(
-        Marker(
-          markerId: MarkerId(pointID),
-          position: position,
-          icon: icon,
-          onTap: () {
-            print("📌 INFO: ${pointID} noktasına basıldı, lastFilled: $lastFilled");
-
-            setState(() {
-              _selectedPoint = pointID;
-              _selectedLastFilled = lastFilled;
-              _selectedPosition = position;
-              _selectedIsAnimalHouse = (title == "Hayvan Evi");
-
-              // 🔥 TÜM DÜZELTME BURADA: Türü direkt Firestore'dan al!
-              _selectedAnimal = data.containsKey('animal') ? data['animal'] : null;
-
-              // ✅ Debug için yazdır
-              print("✅ Seçilen Mama Kabı Türü: ${_selectedAnimal}");
-            });
-
-            _customInfoWindowController.addInfoWindow!(
-              Container(
-                width: 230,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    const BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 2),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _selectedIsAnimalHouse
-                          ? "🏠 Burası Hayvan Evi"
-                          : "📍 Mama Kabı (${_selectedAnimal == 'cat' ? 'Kedi' : 'Köpek'})",
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-              position,
-            );
-          },
-        ),
-      );
-    });
   }
 
   Future<void> _setCustomMarker() async {
@@ -356,6 +364,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     print("🔥 UI ŞU ANDA _selectedPosition: $_selectedPosition");
+    final isFilling = _selectedPoint != null && _fillingStates[_selectedPoint] == true;
+    final isFilled = _selectedPoint != null && _fillCompletedStates[_selectedPoint] == true;
+
 
     return Scaffold(
       appBar: PreferredSize(
@@ -421,11 +432,53 @@ class _HomeScreenState extends State<HomeScreen> {
               onLongPress: _addMarker,
             ),
 
+            // Sol alt köşeye sabit Acil Durum butonu
+            Positioned(
+              bottom: 13,
+              left: 15,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const EmergencyReportScreen()),
+                  );
+                },
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(2, 4),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    "Acil\nDurum",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+
+
             // **Mama noktasına bağlı kutucuk**
             if (_selectedPosition != null)
               Positioned(
-                left: MediaQuery.of(context).size.width / 2 - 120, // **Ortala**
-                top: MediaQuery.of(context).size.height / 2 - 100, // **Daha aşağı çek**
+                left: MediaQuery.of(context).size.width / 2 - 120,
+                top: MediaQuery.of(context).size.height / 2 - 100,
                 child: Container(
                   width: 230,
                   padding: const EdgeInsets.all(12),
@@ -440,66 +493,145 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _selectedIsAnimalHouse ? "🏠 Hayvan Evi" : "📍 Mama Kabı (${_selectedAnimalType ?? 'Bilinmiyor'})",
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        _selectedIsAnimalHouse ? " Hayvan Evi 🏠" : "Mama Kabı (${_selectedAnimalType ?? 'Bilinmiyor'})",
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                       ),
-                      if (!_selectedIsAnimalHouse) // **Hayvan evinde bu çıkmasın!**
+
+                      // 🔥 SADECE HAYVAN EVİ GÖRSEL + TARİH
+                      if (_selectedIsAnimalHouse &&
+                          _lastFilledImageUrl != null &&
+                          _lastFilledImageUrl!.isNotEmpty)
+                        Column(
+                          children: [
+                            if (_selectedLastFilled != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(
+                                  "📅 Eklenme Tarihi: ${_formatTimestamp(_selectedLastFilled!)}",
+                                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                                ),
+                              ),
+                            GestureDetector(
+                              onTap: () => _showImagePopup(context, _lastFilledImageUrl!),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(
+                                  _lastFilledImageUrl!,
+                                  width: 180,
+                                  height: 100,
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return const SizedBox(
+                                      width: 180,
+                                      height: 100,
+                                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+
+
+                      // 🔥 MAMA KABI AYNI KALDI
+                      if (!_selectedIsAnimalHouse)
                         AnimatedSwitcher(
                           duration: const Duration(seconds: 1),
-                          child: _isFilling
+                          child: isFilling
                               ? const Text(
                             "⏳ Dolduruluyor...✅",
                             key: ValueKey(2),
                             style: TextStyle(fontSize: 14, color: Colors.green),
                           )
-                              : _fillCompleted
-                              ? Text(
-                            "⏳ Dolduruluyor... ✅",
-                            key: const ValueKey(3),
-                            style: const TextStyle(fontSize: 14, color: Colors.green),
+                              : isFilled
+                              ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 6),
+                              if (_selectedLastFilled != null)
+                                Text(
+                                  "🟢 Son Doldurma Zamanı: \n  🕰️ ${_formatTimestamp(_selectedLastFilled!)}",
+                                  style: const TextStyle(fontSize: 16, color: Colors.black54),
+                                ),
+                              const SizedBox(height: 8),
+                              if (_lastFilledImageUrl != null &&
+                                  _lastFilledImageUrl!.isNotEmpty)
+                                GestureDetector(
+                                  onTap: () => _showImagePopup(context, _lastFilledImageUrl!),
+                                  child: Center(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.network(
+                                        _lastFilledImageUrl!,
+                                        width: 160,
+                                        height: 100,
+                                        fit: BoxFit.cover,
+                                        loadingBuilder: (context, child, loadingProgress) {
+                                          if (loadingProgress == null) return child;
+                                          return const SizedBox(
+                                            width: 160,
+                                            height: 100,
+                                            child: Center(
+                                              child: CircularProgressIndicator(
+                                                color: Colors.purple,
+                                                strokeWidth: 4,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        errorBuilder: (context, error, stackTrace) =>
+                                        const Icon(Icons.broken_image),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           )
-                              : Text(
-                            _selectedLastFilled != null
-                                ? "🟢 Son Doldurma Zamanı: \n ${_formatTimestamp(_selectedLastFilled!)}"
-                                : (_fillCompleted ? "✅ Dolduruldu" : "🔴 Henüz Doldurulmadı"),
-                            key: const ValueKey(2),
-                            style: const TextStyle(fontSize: 14, color: Colors.black54),
-                          ),
-                        ),
-                      const SizedBox(height: 8),
-                      if (!_selectedIsAnimalHouse && !_fillCompleted) // **Hayvan evinde buton çıkmasın!**
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green, // Arka plan yeşil
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10), // Butonu iyice büyüttüm
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10), // Daha sert köşeler
-                              side: BorderSide(color: Colors.green.shade600, width: 2), // Koyu yeşil güçlü çerçeve
-                            ),
-                            elevation: 4, // Hafif gölge ekledim, güçlü dursun
-                            shadowColor: Colors.green.withOpacity(0.5), // Hafif yeşil gölge
-                          ),
-                          onPressed: () {
-                            _startFillingAnimation();
-                            setState(() {
-                              _fillCompleted = true; // **Doldurma tamamlandı**
-                            });
-                          },
-                          child: Text(
-                            "Doldur 🐈🐕",
-                            style: TextStyle(
-                              fontSize: 16, // Yazıyı iyice büyüttüm
-                              fontWeight: FontWeight.bold, // Daha güçlü hissettirsin
-                              color: Colors.white, // Beyaz yazı
-                              letterSpacing: 1.2, // Hafif harf aralığıyla daha karizmatik duracak
-                            ),
+                              : const Text(
+                            "🔴 Henüz Doldurulmadı",
+                            key: ValueKey(4),
+                            style: TextStyle(fontSize: 14, color: Colors.black54),
                           ),
                         ),
 
+                      const SizedBox(height: 8),
+
+                      if (!_selectedIsAnimalHouse && !_fillCompleted)
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: BorderSide(color: Colors.green.shade600, width: 2),
+                            ),
+                            elevation: 4,
+                            shadowColor: Colors.green.withOpacity(0.5),
+                          ),
+                          onPressed: () {
+                            _startFillingAnimation();
+                            _fillCompleted = true;
+                          },
+                          child: const Text(
+                            "Doldur 🐈🐕",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
               ),
+
+
 
             // **Filtre butonları ve veteriner simgesi**
             Positioned(
@@ -521,22 +653,44 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
+                  // 🐾 Veteriner butonu
                   Container(
-                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: Colors.black26,
                       borderRadius: BorderRadius.circular(15),
                     ),
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => NearbyVetsScreen()),
-                        );
-                      },
-                      child: Image.asset('assets/images/veterinary.png', width: 45, height: 45),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10), // 🔥 Çevresel boşluk
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(0.1), // 🔥 İkon çevresi boşluk
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => NearbyVetsScreen()),
+                              );
+                            },
+                            child: Image.asset('assets/images/veterinary.png', width: 45, height: 45),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.all(0.1), // 🔥 Barınak ikonu çevresi boşluk
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => ShelterListScreen()), // Barınak sayfası
+                              );
+                            },
+                            child: Image.asset('assets/images/animal-shelter.png', width: 50, height: 50),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+
                 ],
               ),
             ),
@@ -552,6 +706,7 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           FloatingActionButton(
+            heroTag: 'addFeedingPointFab', // ✅ 1. FAB
             backgroundColor: Colors.white,
             onPressed: () {
               Navigator.push(
@@ -563,6 +718,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 10),
           FloatingActionButton(
+            heroTag: 'addCathouseFab', // ✅ 2. FAB
             backgroundColor: Colors.white,
             onPressed: () {
               Navigator.push(
@@ -574,6 +730,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 10),
           FloatingActionButton(
+            heroTag: 'goToMyLocationFab', // ✅ 3. FAB
             backgroundColor: Colors.white,
             onPressed: () {
               if (_currentPosition != null && _controller != null) {
@@ -622,37 +779,41 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _startFillingAnimation() async {
     if (_selectedPoint == null) return;
+    final pointId = _selectedPoint!;
 
     setState(() {
-      _isFilling = true;  // **"Dolduruluyor..." animasyonu başlasın**
-      _fillCompleted = false;
+      _fillingStates[pointId] = true;
+      _fillCompletedStates[pointId] = false;
     });
 
-// **Firestore'u async olarak güncelle**
-    _confirmFillingPoint().then((_) {
+    await _confirmFillingPoint();
+    final updatedDoc = await _firestore.collection('feedPoints').doc(_selectedPoint!).get();
+    if (updatedDoc.exists) {
+      final data = updatedDoc.data()!;
       setState(() {
-        _isFilling = false;  // **Animasyonu kapat**
-        _fillCompleted = true;  // **"Dolduruldu ✅" yazısı gösterilsin**
-      });
+        _selectedLastFilled = data['lastFilled'];
+        _lastFilledImageUrl = data['lastFilledImageUrl'];
+        _fillCompletedStates[_selectedPoint!] = true;
+        _fillingStates[_selectedPoint!] = false;
+        _fillCompleted = true;
 
-      // **Firestore'daki güncellenmiş veriyi tekrar al**
-      FirebaseFirestore.instance
-          .collection('feedPoints')
-          .doc(_selectedPoint)
-          .snapshots()
-          .listen((docSnapshot) {
-        if (docSnapshot.exists) {
-          setState(() {
-            _selectedLastFilled = docSnapshot['lastFilled'];
-          });
-        }
       });
-    });
+    }
 
-    await Future.delayed(const Duration(seconds: 2)); // **2 saniye daha kalsın**
-    setState(() {
-      _fillCompleted = false; // **Sonra tekrar son doldurulma bilgisi gözüksün**
-    });
+
+    await Future.delayed(const Duration(seconds: 2));
+
+    final docSnap = await _firestore.collection('feedPoints').doc(pointId).get();
+    if (docSnap.exists) {
+      final data = docSnap.data();
+      setState(() {
+        _selectedLastFilled = data?['lastFilled'];
+        _fillingStates[pointId] = false;
+        _fillCompletedStates[pointId] = true;
+        _fillCompleted = true;
+      });
+    }
+
   }
 
   Future<void> _confirmFillingPoint() async {
@@ -676,7 +837,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'timestamp': FieldValue.serverTimestamp(),
       });
 
-      // **3️⃣ Kullanıcının `mamaDoldurmaSayisi` değerini artır**
+      // **3️⃣ Kullanıcının mamaDoldurmaSayisi değerini artır**
       await _firestore.collection('users').doc(userID).update({
         'mamaDoldurmaSayisi': FieldValue.increment(1), // 🔥 Kullanıcı mama doldurdukça 1 artır
       });
@@ -694,9 +855,27 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       print("❌ Hata: $_selectedPoint lastFilled güncellenemedi! Hata: $e");
     }
+
+    // 📸 Fotoğraf yüklet
+    final picked = await ImagePicker().pickImage(
+      source: await _showImageSourceDialog(), // bu fonksiyonu birazdan ekleyeceğiz
+    );
+
+    if (picked != null) {
+      final file = File(picked.path);
+      final bytes = await file.readAsBytes();
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+      final ref = FirebaseStorage.instance.ref().child('feed_point_images/$fileName');
+      await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+      final url = await ref.getDownloadURL();
+
+      // 🔥 Firestore'a URL'yi ekle
+      await _firestore.collection('feedPoints').doc(_selectedPoint).update({
+        'lastFilledImageUrl': url,
+      });
+    }
   }
-
-
 
   void _listenForMarkerUpdates() {
     _firestore.collection('feedPoints').snapshots().listen((snapshot) {
@@ -744,4 +923,104 @@ class _HomeScreenState extends State<HomeScreen> {
     print("✅ Tüm eksik lastFilled alanları eklendi!");
   }
 
+
+  Future<ImageSource> _showImageSourceDialog() async {
+    ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFF6EFFA),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+        contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 4), // 👈 ALT BOŞLUK AZALTILDI
+        title: Row(
+          children: const [
+            Icon(FontAwesomeIcons.image, color: Color(0xFF822E8A)),
+            SizedBox(width: 12),
+            Text(
+              "Mama Kabı Fotoğrafı",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: const Text(
+          "Fotoğrafı nasıl eklemek istersin?",
+          style: TextStyle(fontSize: 16),
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actionsPadding: const EdgeInsets.only(bottom: 10, top: 8), // 👈 BUTONLA ARADAKİ MESAFE AZALTILDI
+        actions: [
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(context, ImageSource.camera),
+            icon: const Icon(FontAwesomeIcons.camera, size: 18),
+            label: const Text("Kamera"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFF822E8A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              elevation: 4,
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(context, ImageSource.gallery),
+            icon: const Icon(FontAwesomeIcons.image, size: 18),
+            label: const Text("Galeri"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFF822E8A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              elevation: 4,
+            ),
+          ),
+        ],
+      ),
+    );
+    return source ?? ImageSource.gallery;
+  }
+
+  void _showImagePopup(BuildContext context, String imageUrl) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "ImagePopup",
+      barrierColor: Colors.black.withOpacity(0.85), // direkt siyah arka plan
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+      transitionBuilder: (context, animation, _, __) {
+        final fadeIn = CurvedAnimation(parent: animation, curve: Curves.easeInOut);
+
+        return FadeTransition(
+          opacity: fadeIn,
+          child: Stack(
+            children: [
+              // 📸 ORTADAKİ GÖRSEL
+              Center(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.network(
+                    imageUrl,
+                    width: MediaQuery.of(context).size.width * 0.85,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+
+              // ❌ KAPAT BUTONU
+              Positioned(
+                top: 40,
+                right: 30,
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context, rootNavigator: true).pop(),
+                  child: const Icon(Icons.close, size: 32, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
 }
+

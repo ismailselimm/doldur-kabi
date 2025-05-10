@@ -1,3 +1,4 @@
+import 'package:doldur_kabi/screens/login_screens/municipality_login_screen.dart';
 import 'package:doldur_kabi/screens/login_screens/password_reset_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -234,46 +235,72 @@ class LoginScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.4),
-                        borderRadius: BorderRadius.circular(16),
-                        color: Colors.white.withOpacity(0.1),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => AdminLoginScreen()),
-                          );
-                        },
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero, // Container zaten padding veriyor
-                          foregroundColor: Colors.white,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          minimumSize: Size.zero,
-                        ),
-                        child: Column(
-                          children: const [
-                            FaIcon(
-                              FontAwesomeIcons.userShield,
-                              size: 22,
-                              color: Colors.white,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        // Admin Girişi
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.4),
+                            borderRadius: BorderRadius.circular(16),
+                            color: Colors.white.withOpacity(0.1),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => AdminLoginScreen()),
+                              );
+                            },
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              foregroundColor: Colors.white,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              minimumSize: Size.zero,
                             ),
-                            SizedBox(height: 6),
-                            Text(
-                              'Admin Girişi',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                              ),
+                            child: const Column(
+                              children: [
+                                FaIcon(FontAwesomeIcons.userShield, size: 22, color: Colors.white),
+                                SizedBox(height: 6),
+                                Text('Admin Girişi', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white)),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                    )
+                        // Belediye Girişi
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.4),
+                            borderRadius: BorderRadius.circular(16),
+                            color: Colors.white.withOpacity(0.1),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => MunicipalityLoginScreen()),
+                              );
+                            },
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              foregroundColor: Colors.white,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              minimumSize: Size.zero,
+                            ),
+                            child: const Column(
+                              children: [
+                                FaIcon(FontAwesomeIcons.city, size: 22, color: Colors.white),
+                                SizedBox(height: 6),
+                                Text('Belediye Girişi', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
                   ],
                 ),
               ],

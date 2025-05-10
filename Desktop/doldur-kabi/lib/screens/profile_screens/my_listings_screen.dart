@@ -58,7 +58,8 @@ class _IlanlarimScreenState extends State<IlanlarimScreen> with SingleTickerProv
   }
 
   Widget _buildLostPetsTab() {
-    User? currentUser = _auth.currentUser;
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    print("🔍 Aktif UID: ${currentUser?.uid ?? 'Kullanıcı yok'}");
 
     if (currentUser == null) {
       return const Center(child: Text("Lütfen giriş yapın."));
@@ -110,10 +111,12 @@ class _IlanlarimScreenState extends State<IlanlarimScreen> with SingleTickerProv
               petName: postData['petName'] ?? "Bilinmeyen",
               ownerName: "Siz",
               city: postData['city'] ?? "Bilinmeyen Şehir",
-              imageUrl: postData['imageUrl'] ?? "",
               description: postData['location'] ?? "Konum Bilinmiyor",
               postRef: doc.reference,
+              imageUrls: List<String>.from(postData['imageUrls'] ?? []), // 💥 EKLE BUNU
             );
+
+
           }).toList(),
         );
       },
@@ -129,10 +132,13 @@ class _IlanlarimScreenState extends State<IlanlarimScreen> with SingleTickerProv
         required String petName,
         required String ownerName,
         required String city,
-        required String imageUrl,
-        required String description, // Burayı "location" ile değiştirdik
+        required String description,
         required DocumentReference postRef,
+        required List<String> imageUrls,
+
       }) {
+    String firstImage = imageUrls.isNotEmpty ? imageUrls[0] : "";
+
     return Card(
       elevation: 10,
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -154,7 +160,7 @@ class _IlanlarimScreenState extends State<IlanlarimScreen> with SingleTickerProv
                 ),
               ),
               subtitle: Text(
-                "📍 $description",
+                "📍 $city",
                 style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
               ),
               trailing: Row(
@@ -177,9 +183,9 @@ class _IlanlarimScreenState extends State<IlanlarimScreen> with SingleTickerProv
             ),
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
-              child: imageUrl.isNotEmpty
+              child: firstImage.isNotEmpty
                   ? Image.network(
-                imageUrl,
+                firstImage,
                 fit: BoxFit.cover,
                 width: double.infinity,
                 height: 150,
@@ -191,11 +197,24 @@ class _IlanlarimScreenState extends State<IlanlarimScreen> with SingleTickerProv
                 child: const Center(child: Text("Resim Yok")),
               ),
             ),
+            if (description.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                child: Text(
+                  '"$description"',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
+
 
 
   Widget _buildAdoptionsTab() {

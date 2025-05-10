@@ -64,7 +64,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         'createdAt': Timestamp.now(),
         'userId': user?.uid,
         'username': user?.displayName ?? 'Unknown',
-        'userImage': user?.photoURL ?? 'assets/images/default_avatar.png',
+        'userImage': user?.photoURL ?? '',
         'likes': 0,
         'comments': 0,
       });

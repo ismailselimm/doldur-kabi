@@ -2,11 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:doldur_kabi/main.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../login_screens/login_screen.dart';
 
 class AddCathouseScreen extends StatefulWidget {
@@ -21,12 +24,26 @@ class _AddCathouseScreenState extends State<AddCathouseScreen> {
   LatLng? _selectedLocation;
   GoogleMapController? _mapController;
   String? _selectedType;
+  File? _selectedImage;
+  String? _uploadedImageUrl;
+
+
 
   @override
   void initState() {
     super.initState();
     _checkUserLoginStatus();
   }
+
+  Future<void> _pickImage() async {
+    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _selectedImage = File(pickedFile.path);
+      });
+    }
+  }
+
 
   /// **🔥 Kullanıcı giriş yapmamışsa alert göster**
   void _checkUserLoginStatus() {
@@ -108,21 +125,31 @@ class _AddCathouseScreenState extends State<AddCathouseScreen> {
     }
 
     try {
-      // **🔥 1️⃣ Yeni hayvan evi ekleniyor**
+      // 🔥 1. Fotoğrafı yükle
+      String? imageUrl;
+      if (_selectedImage != null) {
+        final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final ref = FirebaseStorage.instance.ref().child('animal_house_images/$fileName');
+        final bytes = await _selectedImage!.readAsBytes();
+        await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+        imageUrl = await ref.getDownloadURL(); // ✅ URL alındı
+      }
+
+      // 🔥 2. Firestore'a kayıt
       await FirebaseFirestore.instance.collection('animalHouses').add({
         'animal': _selectedAnimal,
         'latitude': _selectedLocation!.latitude,
         'longitude': _selectedLocation!.longitude,
         'address': _currentAddress ?? 'Bilinmeyen adres',
         'date': DateTime.now(),
-        'addedBy': FirebaseAuth.instance.currentUser!.uid, // **🔥 Kullanıcı eklediğini belirtelim**
+        'addedBy': FirebaseAuth.instance.currentUser!.uid,
+        'imageUrl': imageUrl ?? '', // ✅ Artık boş değil
       });
 
-      // **🔥 2️⃣ Kullanıcı profilinde hayvan evi sayısını artır**
-      String userId = FirebaseAuth.instance.currentUser!.uid;
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({
-        'hayvanEviSayisi': FieldValue.increment(1),
-      });
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .update({'hayvanEviSayisi': FieldValue.increment(1)});
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Yeni hayvan evi başarıyla kaydedildi!")),
@@ -220,14 +247,14 @@ class _AddCathouseScreenState extends State<AddCathouseScreen> {
           'Yeni Hayvan Evi Ekle',
           style: GoogleFonts.montserrat(fontWeight: FontWeight.w900, fontSize: 22, color: Colors.white),
         ),
-        backgroundColor: Color(0xFF9346A1),
+        backgroundColor: const Color(0xFF9346A1),
         centerTitle: true,
         elevation: 4,
         iconTheme: const IconThemeData(
           color: Colors.white,
         ),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -241,7 +268,7 @@ class _AddCathouseScreenState extends State<AddCathouseScreen> {
                 _buildAnimalOption("Köpek", "assets/images/dog.png", "dog"),
               ],
             ),
-            SizedBox(height: 5),
+            const SizedBox(height: 5),
             if (_currentAddress != null)
               Card(
                 elevation: 3,
@@ -249,24 +276,24 @@ class _AddCathouseScreenState extends State<AddCathouseScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Text(
-                    "Adres: $_currentAddress",
+                    "📍Adres : $_currentAddress",
                     style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey[800]),
                   ),
                 ),
               ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             Container(
               height: 300,
               decoration: BoxDecoration(
-                border: Border.all(color: Color(0xFF9346A1), width: 3), // Mor çerçeve ekledik
-                borderRadius: BorderRadius.circular(12), // Köşeleri yumuşattık
+                border: Border.all(color: const Color(0xFF9346A1), width: 3),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12), // Haritayı da köşelerden yuvarladık
+                borderRadius: BorderRadius.circular(12),
                 child: GoogleMap(
                   initialCameraPosition: _selectedLocation != null
                       ? CameraPosition(target: _selectedLocation!, zoom: 17)
-                      : CameraPosition(target: LatLng(37.7749, -122.4194), zoom: 15),
+                      : const CameraPosition(target: LatLng(37.7749, -122.4194), zoom: 15),
                   onMapCreated: (GoogleMapController controller) {
                     _mapController = controller;
                     if (_selectedLocation != null) {
@@ -275,28 +302,70 @@ class _AddCathouseScreenState extends State<AddCathouseScreen> {
                   },
                   onTap: _onMapTap,
                   markers: _selectedLocation != null
-                      ? {Marker(markerId: MarkerId("selected"), position: _selectedLocation!)}
+                      ? {Marker(markerId: const MarkerId("selected"), position: _selectedLocation!)}
                       : {},
                 ),
               ),
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             Text(
               "Ekleyeceğiniz konumu harita üzerinden kaydırarak veya sağ altta bulunan konum işaretine basarak seçiniz.",
               style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[700]),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: _pickImage,
+              child: Container(
+                height: 160,
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.deepPurple, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.grey[200],
+                ),
+                child: _selectedImage == null
+                    ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(FontAwesomeIcons.image, size: 40, color: Colors.grey[600]),
+                    const SizedBox(height: 10),
+                    Text(
+                      "Fotoğraf seçmek için tıklayın",
+                      style: GoogleFonts.poppins(fontSize: 15, color: Colors.grey[700]),
+                    ),
+                  ],
+                )
+                    : Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.file(
+                        _selectedImage!,
+                        width: 110,
+                        height: 120,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "Yüklenen fotoğraf",
+                        style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: _selectedLocation == null
-                  ? null
-                  : () {
-                _saveAnimalHouse();
-              },
+              onPressed: _selectedLocation == null ? null : _saveAnimalHouse,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF23B14D),
+                backgroundColor: const Color(0xFF23B14D),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
                 elevation: 4,
               ),
               child: Text(
@@ -304,10 +373,12 @@ class _AddCathouseScreenState extends State<AddCathouseScreen> {
                 style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
               ),
             ),
+            const SizedBox(height: 30),
           ],
         ),
       ),
-      backgroundColor: Color(0xFFF8F8F8),
+      backgroundColor: const Color(0xFFF8F8F8),
     );
+
   }
 }

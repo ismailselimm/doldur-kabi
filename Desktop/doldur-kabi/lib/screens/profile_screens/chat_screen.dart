@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../community_screens/user_profile_screen.dart';
+
 class ChatScreen extends StatefulWidget {
   final String receiverEmail;
 
@@ -17,6 +19,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _messageController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  String? receiverId;
+
+
 
   late String currentUserEmail;
   late String chatId;
@@ -56,38 +61,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _checkIfBlocked();
   }
 
-  void _showCustomDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,  // Kullanıcı, dışarıya tıklayarak kapatamaz
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: const [
-              Icon(Icons.error_outline, color: Colors.red, size: 30),
-              SizedBox(width: 10),
-              Text("Hata!", style: TextStyle(fontSize: 18)),
-            ],
-          ),
-          content: Text(
-            "Kendinize mesaj gönderemezsiniz.",
-            style: TextStyle(fontSize: 16),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);  // Dialogu kapat
-              },
-              child: Text("Tamam", style: TextStyle(color: Colors.purple)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-
   void _markMessagesAsRead() async {
     var receivedMessages = await _firestore
         .collection('messages')
@@ -110,9 +83,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
 
   Future<void> _getReceiverInfo() async {
-    var userSnapshot = await _firestore.collection('users').where('email', isEqualTo: widget.receiverEmail).get();
+    var userSnapshot = await _firestore
+        .collection('users')
+        .where('email', isEqualTo: widget.receiverEmail)
+        .get();
+
     if (userSnapshot.docs.isNotEmpty) {
-      var userData = userSnapshot.docs.first.data();
+      var userDoc = userSnapshot.docs.first;
+      var userData = userDoc.data();
       String fullName = "${userData['firstName']} ${userData['lastName']}";
 
       List<String> nameParts = fullName.split(" ");
@@ -124,14 +102,17 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         receiverName = fullName;
         receiverProfileImage = userData['profileUrl'] ?? "";
+        receiverId = userDoc.id; // 🔥 kullanıcı ID'si
       });
     } else {
       setState(() {
         receiverName = "Bilinmeyen Kullanıcı";
         receiverProfileImage = "";
+        receiverId = ""; // boş bırak
       });
     }
   }
+
 
   Future<void> _checkIfBlocked() async {
     var blockedUserSnapshot = await _firestore.collection('blocked_users').doc(currentUserEmail).get();
@@ -152,20 +133,43 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            CircleAvatar(
-              backgroundImage: receiverProfileImage.isNotEmpty
-                  ? NetworkImage(receiverProfileImage)
-                  : const AssetImage("assets/images/default_profile.png") as ImageProvider,
-              radius: 20,
+            GestureDetector(
+              onTap: () {
+                if (receiverId == null || receiverId!.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Profil bilgileri yükleniyor...")),
+                  );
+                  return;
+                }
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UserProfileScreen(
+                      userId: receiverId!,
+                      userEmail: widget.receiverEmail,
+                    ),
+                  ),
+                );
+              },
+              child: CircleAvatar(
+                backgroundImage: receiverProfileImage.isNotEmpty
+                    ? NetworkImage(receiverProfileImage)
+                    : const AssetImage("assets/images/default_profile.png") as ImageProvider,
+                radius: 20,
+              ),
             ),
             const SizedBox(width: 8),
             Text(
               receiverName,
-              style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, color: Colors.white),
+              style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
             ),
           ],
         ),
-        backgroundColor: Colors.black87,
+        backgroundColor: Colors.deepPurple,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           PopupMenuButton<String>(
@@ -214,33 +218,68 @@ class _ChatScreenState extends State<ChatScreen> {
             // ✅ WhatsApp gibi klavyeye yapışık mesaj kutusu
             Container(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom + 30, // Daha iyi hizalama
-                left: 10, right: 10, top: 10, // Hafif boşluk ekleyelim ki daha iyi görünsün
-              ),              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Colors.grey[300]!)),
+                bottom: MediaQuery.of(context).viewInsets.bottom + 40,
+                left: 12,
+                right: 12,
+                top: 10,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFDF9FF),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 10,
+                    offset: Offset(0, -2),
+                  ),
+                ],
+                borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
               ),
               child: Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: const InputDecoration(
-                        hintText: "Mesajınızı yazın...",
-                        border: InputBorder.none,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.15),
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: TextField(
+                        controller: _messageController,
+                        focusNode: _focusNode,
+                        decoration: const InputDecoration(
+                          hintText: "Mesajınızı yazın...",
+                          border: InputBorder.none,
+                        ),
                       ),
                     ),
                   ),
+                  const SizedBox(width: 10),
                   GestureDetector(
                     onTap: () {
                       sendMessage(_messageController.text);
                       _messageController.clear();
                     },
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF9346A1),
-                        shape: BoxShape.circle,
+                    child: AnimatedContainer(
+                      duration: Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9346A1),
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.purple.withOpacity(0.3),
+                            blurRadius: 6,
+                            offset: Offset(2, 4),
+                          ),
+                        ],
                       ),
                       child: const Icon(Icons.send, color: Colors.white, size: 22),
                     ),

@@ -19,6 +19,9 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
   final TextEditingController _petNameController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  final List<File> _selectedImages = [];
+  final TextEditingController _descriptionController = TextEditingController();
+
   String _selectedPetType = "Kedi";
   File? _selectedImage;
   bool _isLoading = false;
@@ -35,14 +38,16 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
     "Şırnak", "Bartın", "Ardahan", "Iğdır", "Yalova", "Karabük", "Kilis", "Osmaniye", "Düzce"
   ];
 
-  Future<void> _pickImage() async {
-    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
+  Future<void> _pickImages() async {
+    final List<XFile>? pickedFiles = await ImagePicker().pickMultiImage();
+    if (pickedFiles != null && pickedFiles.isNotEmpty) {
       setState(() {
-        _selectedImage = File(pickedFile.path);
+        _selectedImages.clear();
+        _selectedImages.addAll(pickedFiles.map((xfile) => File(xfile.path)));
       });
     }
   }
+
 
   @override
   void initState() {
@@ -55,9 +60,9 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
     if (_petNameController.text.isEmpty ||
         _locationController.text.isEmpty ||
         _phoneController.text.isEmpty ||
-        _selectedImage == null) { // 🔥 Fotoğraf eklenmezse hata verecek!
+        _selectedImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Lütfen tüm alanları doldurun ve bir fotoğraf ekleyin!")),
+        const SnackBar(content: Text("Lütfen tüm alanları doldurun ve en az 1 fotoğraf ekleyin!")),
       );
       return;
     }
@@ -66,34 +71,35 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
       _isLoading = true;
     });
 
-    String? imageUrl;
+    List<String> uploadedImageUrls = [];
 
     try {
-      // 🔥 Fotoğraf varsa, Storage'a yükle
-      imageUrl = await _uploadImageToStorage(_selectedImage!);
+      // 🔥 Her resmi sıkıştırıp yükle, URL'yi listeye ekle
+      for (File image in _selectedImages) {
+        final url = await _uploadImageToStorage(image);
+        if (url != null) uploadedImageUrls.add(url);
+      }
 
-      if (imageUrl == null) {
-        print("❌ HATA: Fotoğraf yükleme başarısız!");
+      if (uploadedImageUrls.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Fotoğraf yüklenirken bir hata oluştu!")),
+          const SnackBar(content: Text("Fotoğraflar yüklenirken bir hata oluştu.")),
         );
+        setState(() => _isLoading = false);
         return;
       }
 
       // 🔥 Firestore'a ilan ekle
-      DocumentReference docRef = await FirebaseFirestore.instance.collection('lost_pets').add({
+      await FirebaseFirestore.instance.collection('lost_pets').add({
         'petName': _petNameController.text,
         'location': _locationController.text,
         'phone': _phoneController.text,
         'petType': _selectedPetType,
-        'city': _selectedCity, // 🔥 Şehir filtresi için kaydediyoruz
-        'imageUrl': imageUrl, // 🔥 Artık HER ZAMAN resim var!
+        'city': _selectedCity,
+        'imageUrls': uploadedImageUrls, // 🔥 Çoklu URL kaydı
+        'description': _descriptionController.text,
         'timestamp': FieldValue.serverTimestamp(),
         'userId': FirebaseAuth.instance.currentUser?.uid,
       });
-
-      print("✅ Firestore’a ilan başarıyla eklendi! DOC ID: ${docRef.id}");
-      print("🖼️ Kayıtlı Resim URL: $imageUrl");
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Kayıp ilanı başarıyla eklendi!")),
@@ -113,14 +119,13 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
   }
 
 
-
   Future<String?> _uploadImageToStorage(File image) async {
     try {
       print("📡 Fotoğraf sıkıştırılıyor...");
       File? compressedImage = await _compressImage(image);
 
-      if (compressedImage == null) {
-        print("❌ HATA: Resim sıkıştırılamadı!");
+      if (compressedImage == null || !(await compressedImage.exists())) {
+        print("❌ HATA: Sıkıştırılmış dosya yok!");
         return null;
       }
 
@@ -129,29 +134,49 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
       Reference storageRef = FirebaseStorage.instance.ref().child('lost_pets/$fileName.jpg');
 
       UploadTask uploadTask = storageRef.putFile(compressedImage);
-      TaskSnapshot snapshot = await uploadTask;
 
-      String downloadUrl = await snapshot.ref.getDownloadURL();
-      print("✅ Fotoğraf başarıyla yüklendi: $downloadUrl");
-      return downloadUrl;
+      TaskSnapshot snapshot = await uploadTask.whenComplete(() => {});
+      if (snapshot.state == TaskState.success) {
+        String downloadUrl = await snapshot.ref.getDownloadURL();
+        print("✅ Fotoğraf başarıyla yüklendi: $downloadUrl");
+        return downloadUrl;
+      } else {
+        print("❌ HATA: Upload başarısız oldu snapshot.state = ${snapshot.state}");
+        return null;
+      }
     } catch (e) {
       print("❌ HATA: Fotoğraf yükleme hatası: $e");
       return null;
     }
   }
 
+
+
   Future<File?> _compressImage(File imageFile) async {
     final dir = await getTemporaryDirectory();
-    final targetPath = '${dir.path}/${Random().nextInt(100000)}.jpg';
+    final targetPath = '${dir.path}/${const Uuid().v4()}.jpg'; // 🔥 random düzgün isim
 
-    final result = await FlutterImageCompress.compressAndGetFile(
-      imageFile.absolute.path,
-      targetPath,
-      quality: 70, // 🔥 Kaliteyi düşürerek dosya boyutunu azalt
-    );
+    try {
+      final result = await FlutterImageCompress.compressAndGetFile(
+        imageFile.absolute.path,
+        targetPath,
+        quality: 80, // çok düşük kalite verme, 80 olsun
+        format: CompressFormat.jpeg, // 🔥 formatı açık açık söyle JPEG olsun
+      );
 
-    return result != null ? File(result.path) : null;
+      if (result == null) {
+        print("❌ compressAndGetFile null döndü!");
+        return null;
+      }
+
+      print("✅ Sıkıştırma başarılı: ${result.path}");
+      return File(result.path);
+    } catch (e) {
+      print("❌ Sıkıştırma sırasında hata: $e");
+      return null;
+    }
   }
+
 
 
   @override
@@ -196,6 +221,7 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
                 _buildTextField("Hayvanın Adı", _petNameController),
                 _buildTextField("Nerede Kayboldu? (İl-İlçe Şeklinde)", _locationController),
                 _buildTextField("İletişim Numarası", _phoneController, keyboardType: TextInputType.phone),
+                _buildTextField("Açıklama (isteğe bağlı)", _descriptionController, keyboardType: TextInputType.multiline),
                 const SizedBox(height: 20),
                 _buildImageUploadCard(),
                 const SizedBox(height: 20),
@@ -317,37 +343,46 @@ class _AddLostPetScreenState extends State<AddLostPetScreen> {
 
   Widget _buildImageUploadCard() {
     return GestureDetector(
-      onTap: _pickImage,
-      child: Container(
-        width: double.infinity, // 📌 **Tüm genişliği kaplamasını sağla**
-        child: Card(
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text("Fotoğraf Yükle", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                _selectedImage == null
-                    ? Column(
-                  children: [
-                    const Icon(Icons.add_photo_alternate, size: 80, color: Colors.grey), // 📌 **İkonu büyüt**
-                    const SizedBox(height: 12),
-                    const Text("Fotoğraf Seç", style: TextStyle(color: Colors.grey, fontSize: 16)), // **Yazıyı büyüt**
-                  ],
-                )
-                    : ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.file(_selectedImage!, fit: BoxFit.cover, width: double.infinity, height: 250), // 📌 **Resmi büyüt**
+      onTap: _pickImages,
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            children: [
+              Text("Fotoğrafları Yükle", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              _selectedImages.isEmpty
+                  ? Column(
+                children: const [
+                  Icon(Icons.add_photo_alternate, size: 80, color: Colors.grey),
+                  SizedBox(height: 12),
+                  Text("Fotoğraf Seç", style: TextStyle(color: Colors.grey, fontSize: 16)),
+                ],
+              )
+                  : SizedBox(
+                height: 150,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _selectedImages.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(_selectedImages[index], width: 150, fit: BoxFit.cover),
+                      ),
+                    );
+                  },
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+
 
 }

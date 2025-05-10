@@ -51,7 +51,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                "Topluluk sayfamızda gönderiler paylaşılmaktadır, hayvan sahiplendirme yapılmaktadır ve kayıp hayvan ilanı verilebilmektedir. "
+                "Topluluk sayfamızda gönderiler paylaşılmaktadır. "
                     "Bu özellikleri kullanabilmek için giriş yapmanız gerekmektedir.",
                 style: GoogleFonts.poppins(fontSize: 16, color: Colors.black87, height: 1.4),
                 textAlign: TextAlign.center,
@@ -151,7 +151,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     postOwnerId: postData['userId'] ?? "",
                     postOwnerEmail: postData['email'] ?? "",
                     username: postData['username'] ?? "Bilinmeyen Kullanıcı",
-                    userImage: postData['userImage'] ?? "https://via.placeholder.com/150",
+                    userImage: (postData['userImage'] != null && postData['userImage'].toString().startsWith("http"))
+                        ? postData['userImage']
+                        : "https://via.placeholder.com/150",
                     postImage: postData['imageUrl'] ?? "https://via.placeholder.com/300",
                     postDescription: postData['description'] ?? "",
                     likes: postData['likes'] ?? 0,
