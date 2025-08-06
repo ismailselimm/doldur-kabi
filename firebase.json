@@ -1,0 +1,32 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "doldur-kabi-48e54",
+          "appId": "1:618741724404:android:8d00a77a5bfe551ee5daa1",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "doldur-kabi-48e54",
+          "configurations": {
+            "android": "1:618741724404:android:8d00a77a5bfe551ee5daa1",
+            "ios": "1:618741724404:ios:6a975f98ece15255e5daa1",
+            "macos": "1:618741724404:ios:6a975f98ece15255e5daa1",
+            "web": "1:618741724404:web:04c3b37bedb45605e5daa1",
+            "windows": "1:618741724404:web:ad8861811ad0b732e5daa1"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}
